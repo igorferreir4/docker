@@ -40,7 +40,7 @@ jobs:
       CACHE_TAG: casdoor-1.0.1-amd64
       CACHE_TAG_OLD: casdoor-1.0.1-amd64
       GOARCH: amd64
-    working_directory: ~/project/containers/registrator/teste
+    working_directory: ~/project/containers/registrator/1.0.1
     steps:
       - checkout:
           path: ~/project
@@ -61,7 +61,7 @@ jobs:
       CACHE_TAG: casdoor-1.0.1-arm64
       CACHE_TAG_OLD: casdoor-1.0.1-arm64
       GOARCH: arm64
-    working_directory: ~/project/containers/registrator/teste
+    working_directory: ~/project/containers/registrator/1.0.1
     steps:
       - checkout:
           path: ~/project
@@ -83,7 +83,7 @@ jobs:
       CACHE_ARM64: casdoor-1.0.1-arm64
       IMAGE_REPO: igorferreir4/casdoor
       IMAGE_TAGS: 1.0.1,latest
-    working_directory: ~/project/containers/registrator/teste
+    working_directory: ~/project/containers/registrator/1.0.1
     steps:
       - checkout:
           path: ~/project
