@@ -1,17 +1,3 @@
-# FROM caddy:2.7.6-alpine
-
-# RUN set -eux; \
-# 	apkArch="$(apk --print-arch)"; \
-# 	case "$apkArch" in \
-# 		x86_64)  binArch='amd64' ;; \
-# 		aarch64) binArch='arm64' ;; \
-# 		*) echo >&2 "error: unsupported architecture ($apkArch)"; exit 1 ;;\
-# 	esac; \
-# 	wget -O caddy "https://github.com/igorferreir4/caddy/releases/download/v2.7.6/caddy-linux-${binArch}"; \
-# 	rm /usr/bin/caddy; \
-#     mv caddy /usr/bin; \
-#     chmod +x /usr/bin/caddy
-
 FROM caddy:2.7.6-builder-alpine AS builder
 
 RUN xcaddy build \

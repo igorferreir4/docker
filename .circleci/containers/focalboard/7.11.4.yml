@@ -107,6 +107,22 @@ jobs:
                   --cache-from="$CACHE_REPO:$CACHE_AMD64" \
                   --cache-from="$CACHE_REPO:$CACHE_ARM64" \
                   --push --platform=linux/amd64,linux/arm64/v8 $TAGS .
+      - run:
+          name: Update Dockerhub README.
+          command: |
+            PAYLOAD="username=$DOCKERHUB_USERNAME&password=$DOCKERHUB_PASSWORD"
+            JWT=$(curl -s -d "$PAYLOAD" https://hub.docker.com/v2/users/login/ | jq -r .token)
+            HEADER="Authorization: JWT $JWT"
+            URL="https://hub.docker.com/v2/repositories/$IMAGE_REPO/"
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH -H "$HEADER" -H 'Content-type: application/json' --data "{\"full_description\": $(jq -Rs '.' ../README.md)}" $URL)
+
+            if [ $STATUS -eq 200 ]; then
+              echo "README atualizado com sucesso!"
+            else
+              echo "Não foi possivel atualizar o README"
+              echo "Erro: $STATUS"
+              exit 1
+            fi                  
 
   focalboard-v7_11_4-deploy:
     executor: docker-executor

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-docker compose -f docker-compose.amd64 up -d consul-server
+docker compose -f docker-compose.teste up -d consul-server
 sleep 10
-docker compose -f docker-compose.amd64 up -d registrator
+docker compose -f docker-compose.teste up -d registrator
 sleep 10
 docker logs consul-server
 echo "-----------------------------------------------------------"

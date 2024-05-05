@@ -1,6 +1,6 @@
 # Github Repository
 
-- [CLICK](https://github.com/igorferreir4/docker/tree/main/imagens)
+- [CLICK](https://github.com/igorferreir4/docker/tree/main/containers)
 
 # TS3AudioBot for arm64
 

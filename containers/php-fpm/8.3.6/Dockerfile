@@ -1,6 +1,6 @@
 FROM php:8.3.6-fpm-alpine3.19
 
-# Instala as dependências necessárias.
+# Instala as dependências necessárias
 RUN apk update && apk add --no-cache \
     freetype-dev \
     libjpeg-turbo-dev \
