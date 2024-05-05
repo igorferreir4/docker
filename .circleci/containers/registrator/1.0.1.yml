@@ -85,6 +85,7 @@ jobs:
 
   registrator-v1_0_1-build-multi-arch:
     executor: machine-executor-amd64
+    resource_class: medium
     environment:
       CACHE_REPO: igorferreir4/buildcaches
       CACHE_AMD64: registrator-1.0.1-amd64

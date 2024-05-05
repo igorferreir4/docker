@@ -83,6 +83,7 @@ jobs:
 
   caddy-v2_7_6-build-multi-arch:
     executor: machine-executor-amd64
+    resource_class: medium
     environment:
       CACHE_REPO: igorferreir4/buildcaches
       CACHE_AMD64: caddy-2.7.6-amd64

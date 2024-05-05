@@ -83,6 +83,7 @@ jobs:
 
   focalboard-v7_11_4-build-multi-arch:
     executor: machine-executor-amd64
+    resource_class: medium
     environment:
       CACHE_REPO: igorferreir4/buildcaches
       CACHE_AMD64: focalboard-7.11.4-amd64

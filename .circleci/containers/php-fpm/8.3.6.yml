@@ -83,6 +83,7 @@ jobs:
 
   phpfpm-v8_3_6-build-multi-arch:
     executor: machine-executor-amd64
+    resource_class: medium
     environment:
       CACHE_REPO: igorferreir4/buildcaches
       CACHE_AMD64: php-8.3.6-amd64
@@ -109,11 +110,19 @@ jobs:
       - run:
           name: Update Dockerhub README.
           command: |
-            curl -X PATCH -H "Content-Type: application/json" \
-                -H "Authorization: JWT $DOCKERHUB_PASSWORD" \
-                --data-binary "@../README.md" \
-                "https://hub.docker.com/v2/repositories/$IMAGE_REPO/?detail=1" \
-                -o /dev/null -w "%{http_code}\n"
+            PAYLOAD="username=$DOCKERHUB_USERNAME&password=$DOCKERHUB_PASSWORD"
+            JWT=$(curl -s -d "$PAYLOAD" https://hub.docker.com/v2/users/login/ | jq -r .token)
+            HEADER="Authorization: JWT $JWT"
+            URL="https://hub.docker.com/v2/repositories/$IMAGE_REPO/"
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH -H "$HEADER" -H 'Content-type: application/json' --data "{\"full_description\": $(jq -Rs '.' ../README.md)}" $URL)
+
+            if [ $STATUS -eq 200 ]; then
+              echo "README atualizado com sucesso!"
+            else
+              echo "Não foi possivel atualizar o README"
+              echo "Erro: $STATUS"
+              exit 1
+            fi
 
   phpfpm-v8_3_6-deploy:
     executor: docker-executor
