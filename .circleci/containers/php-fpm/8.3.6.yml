@@ -127,9 +127,6 @@ jobs:
   phpfpm-v8_3_6-deploy:
     executor: docker-executor
     steps:
-      # - add_ssh_keys:
-      #     fingerprints:
-      #       - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
       - run:
           name: Export date of build.
           command: |
@@ -137,11 +134,7 @@ jobs:
             echo "$SSH_KEY" | base64 --decode >> ~/.ssh/id_rsa
             chmod 600 ~/.ssh/id_rsa
             ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
-            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - php-fpm 8.3.6" >> circleci-data.txt"
-      # - run:
-      #     name: Deploy to my server
-      #     command: |
-      #       ssh $SSH_USER@$SSH_HOST_IGOR_ARM "~/50GB/docker/executar-docker-compose-up-d.sh >> ~/circleci.txt 2>&1"
+            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - PHP-FPM v8.3.6" >> circleci-builds.txt"
 
 workflows:
   php-8_3_6:
@@ -158,6 +151,6 @@ workflows:
             - phpfpm-v8_3_6-cache-amd64
             - phpfpm-v8_3_6-cache-arm64
 
-      # - phpfpm-v8_3_6-deploy:
-      #     requires:
-      #       - phpfpm-v8_3_6-build-multi-arch
+      - phpfpm-v8_3_6-deploy:
+          requires:
+            - phpfpm-v8_3_6-build-multi-arch
