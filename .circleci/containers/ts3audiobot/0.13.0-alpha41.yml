@@ -127,12 +127,12 @@ jobs:
   ts3audiobot-v0_13_0_alpha41-deploy:
     executor: docker-executor
     steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
       - run:
           name: Export date of build.
           command: |
-            mkdir ~/.ssh
-            echo "$SSH_KEY" | base64 --decode >> ~/.ssh/id_rsa
-            chmod 600 ~/.ssh/id_rsa
             ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
             ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - TS3Audiobot v0.13.0 alpha41" >> circleci-builds.txt"
 
