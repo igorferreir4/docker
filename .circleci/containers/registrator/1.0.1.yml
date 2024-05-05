@@ -121,7 +121,7 @@ jobs:
       #       ssh $SSH_USER@$SSH_HOST_IGOR_ARM "~/50GB/docker/executar-docker-compose-up-d.sh >> ~/circleci.txt 2>&1"
 
 workflows:
-  casdoor-1.0.1:
+  registrator-v1_0_1:
     jobs:
       - registrator-v1_0_1-cache-amd64
       - registrator-v1_0_1-cache-arm64
