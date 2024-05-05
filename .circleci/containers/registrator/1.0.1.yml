@@ -37,8 +37,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: casdoor-1.0.1-amd64
-      CACHE_TAG_OLD: casdoor-1.0.1-amd64
+      CACHE_TAG: registrator-1.0.1-amd64
+      CACHE_TAG_OLD: registrator-1.0.1-amd64
       GOARCH: amd64
     working_directory: ~/project/containers/registrator/1.0.1
     steps:
@@ -58,8 +58,8 @@ jobs:
     executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: casdoor-1.0.1-arm64
-      CACHE_TAG_OLD: casdoor-1.0.1-arm64
+      CACHE_TAG: registrator-1.0.1-arm64
+      CACHE_TAG_OLD: registrator-1.0.1-arm64
       GOARCH: arm64
     working_directory: ~/project/containers/registrator/1.0.1
     steps:
@@ -79,9 +79,9 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_AMD64: casdoor-1.0.1-amd64
-      CACHE_ARM64: casdoor-1.0.1-arm64
-      IMAGE_REPO: igorferreir4/casdoor
+      CACHE_AMD64: registrator-1.0.1-amd64
+      CACHE_ARM64: registrator-1.0.1-arm64
+      IMAGE_REPO: igorferreir4/registrator
       IMAGE_TAGS: 1.0.1,latest
     working_directory: ~/project/containers/registrator/1.0.1
     steps:
@@ -114,7 +114,7 @@ jobs:
             echo "$SSH_KEY" | base64 --decode >> ~/.ssh/id_rsa
             chmod 600 ~/.ssh/id_rsa
             ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
-            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - casdoor 1.0.1" >> circleci-data.txt"
+            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - registrator 1.0.1" >> circleci-data.txt"
       # - run:
       #     name: Deploy to my server
       #     command: |
