@@ -33,13 +33,14 @@ commands:
             echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
 
 jobs:
-  ts3audiobot-v0_13_0_alpha41-cache-amd64:
+  registrator-v1_0_1-cache-amd64:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: ts3audiobot-0.13.0-alpha41-amd64
-      CACHE_TAG_OLD: ts3audiobot-0.13.0-alpha41-amd64
-    working_directory: ~/project/containers/ts3audiobot/0.13.0-alpha41
+      CACHE_TAG: casdoor-1.0.1-amd64
+      CACHE_TAG_OLD: casdoor-1.0.1-amd64
+      GOARCH: amd64
+    working_directory: ~/project/containers/registrator/teste
     steps:
       - checkout:
           path: ~/project
@@ -53,13 +54,14 @@ jobs:
               --cache-from="$CACHE_REPO:$CACHE_TAG" \
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
 
-  ts3audiobot-v0_13_0_alpha41-cache-arm64:
+  registrator-v1_0_1-cache-arm64:
     executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: ts3audiobot-0.13.0-alpha41-arm64
-      CACHE_TAG_OLD: ts3audiobot-0.13.0-alpha41-arm64
-    working_directory: ~/project/containers/ts3audiobot/0.13.0-alpha41
+      CACHE_TAG: casdoor-1.0.1-arm64
+      CACHE_TAG_OLD: casdoor-1.0.1-arm64
+      GOARCH: arm64
+    working_directory: ~/project/containers/registrator/teste
     steps:
       - checkout:
           path: ~/project
@@ -73,16 +75,15 @@ jobs:
               --cache-from="$CACHE_REPO:$CACHE_TAG" \
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
 
-  ts3audiobot-v0_13_0_alpha41-build-multi-arch:
+  registrator-v1_0_1-build-multi-arch:
     executor: machine-executor-amd64
-    resource_class: medium
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_AMD64: ts3audiobot-0.13.0-alpha41-amd64
-      CACHE_ARM64: ts3audiobot-0.13.0-alpha41-arm64
-      IMAGE_REPO: igorferreir4/ts3audiobot
-      IMAGE_TAGS: 0.13.0-alpha41,latest
-    working_directory: ~/project/containers/ts3audiobot/0.13.0-alpha41
+      CACHE_AMD64: casdoor-1.0.1-amd64
+      CACHE_ARM64: casdoor-1.0.1-arm64
+      IMAGE_REPO: igorferreir4/casdoor
+      IMAGE_TAGS: 1.0.1,latest
+    working_directory: ~/project/containers/registrator/teste
     steps:
       - checkout:
           path: ~/project
@@ -100,10 +101,9 @@ jobs:
                   --cache-from="$CACHE_REPO:$CACHE_ARM64" \
                   --push --platform=linux/amd64,linux/arm64/v8 $TAGS .
 
-  ts3audiobot-v0_13_0_alpha41-deploy:
+  registrator-v1_0_1-deploy:
     executor: docker-executor
     steps:
-      ## Serve apenas se adicionar a key por projeto.
       # - add_ssh_keys:
       #     fingerprints:
       #       - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
@@ -114,23 +114,23 @@ jobs:
             echo "$SSH_KEY" | base64 --decode >> ~/.ssh/id_rsa
             chmod 600 ~/.ssh/id_rsa
             ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
-            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - ts3audiobot 0.13.0-alpha41" >> circleci-data.txt"
+            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - casdoor 1.0.1" >> circleci-data.txt"
       # - run:
       #     name: Deploy to my server
       #     command: |
       #       ssh $SSH_USER@$SSH_HOST_IGOR_ARM "~/50GB/docker/executar-docker-compose-up-d.sh >> ~/circleci.txt 2>&1"
 
 workflows:
-  ts3audiobot-0.13.0-alpha41:
+  casdoor-1.0.1:
     jobs:
-      - ts3audiobot-v0_13_0_alpha41-cache-amd64
-      - ts3audiobot-v0_13_0_alpha41-cache-arm64
+      - registrator-v1_0_1-cache-amd64
+      - registrator-v1_0_1-cache-arm64
 
-      - ts3audiobot-v0_13_0_alpha41-build-multi-arch:
+      - registrator-v1_0_1-build-multi-arch:
           requires:
-            - ts3audiobot-v0_13_0_alpha41-cache-amd64
-            - ts3audiobot-v0_13_0_alpha41-cache-arm64
+            - registrator-v1_0_1-cache-amd64
+            - registrator-v1_0_1-cache-arm64
 
-      # - ts3audiobot-v0_13_0_alpha41-deploy:
+      # - registrator-v1_0_1-deploy:
       #     requires:
-      #       - ts3audiobot-v0_13_0_alpha41-build-multi-arch
+      #       - registrator-v1_0_1-build-multi-arch

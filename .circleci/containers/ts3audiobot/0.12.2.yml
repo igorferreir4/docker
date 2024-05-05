@@ -1,23 +1,20 @@
 version: 2.1
 
 executors:
-  docker-docker:
+  docker-executor:
     docker:
       - image: cimg/base:current
     resource_class: small
     
-  docker-machine:
+  machine-executor-amd64:
     machine:
       image: ubuntu-2204:current
     resource_class: large
 
-parameters:
-  build-and-push:
-    type: boolean
-    default: false
-  run-all:
-    type: boolean
-    default: false
+  machine-executor-arm64:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.large
 
 commands:
   setup-qemu:
@@ -36,11 +33,12 @@ commands:
             echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
 
 jobs:
-   build-ts3audiobot-cache-amd64:
-    executor: docker-machine
+  ts3audiobot-v0_12_2-cache-amd64:
+    executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
       CACHE_TAG: ts3audiobot-0.12.2-amd64
+      CACHE_TAG_OLD: ts3audiobot-0.12.2-amd64
     working_directory: ~/project/containers/ts3audiobot/0.12.2
     steps:
       - checkout:
@@ -49,18 +47,18 @@ jobs:
       - run:
           name: Build docker image
           command: |
-              docker buildx build \
-                  --build-arg BUILDKIT_INLINE_CACHE=1 \
-                  --cache-from="$CACHE_REPO:$CACHE_TAG" \
-                  --tag "$CACHE_REPO:$CACHE_TAG" \
-                  --push --platform=linux/amd64 .
+            docker buildx build \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
+              --cache-from="$CACHE_REPO:$CACHE_TAG" \
+              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
 
-   build-ts3audiobot-cache-arm64:
-    executor: docker-machine
-    resource_class: arm.large
+  ts3audiobot-v0_12_2-cache-arm64:
+    executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
       CACHE_TAG: ts3audiobot-0.12.2-arm64
+      CACHE_TAG_OLD: ts3audiobot-0.12.2-arm64
     working_directory: ~/project/containers/ts3audiobot/0.12.2
     steps:
       - checkout:
@@ -69,20 +67,21 @@ jobs:
       - run:
           name: Build docker image
           command: |
-              docker buildx build \
-                  --build-arg BUILDKIT_INLINE_CACHE=1 \
-                  --cache-from="$CACHE_REPO:$CACHE_TAG" \
-                  --tag "$CACHE_REPO:$CACHE_TAG" \
-                  --push --platform=linux/arm64/v8 .
+            docker buildx build \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
+              --cache-from="$CACHE_REPO:$CACHE_TAG" \
+              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
 
-   build-ts3audiobot-multi-arch:
-    executor: docker-machine
+  ts3audiobot-v0_12_2-build-multi-arch:
+    executor: machine-executor-amd64
+    resource_class: medium
     environment:
       CACHE_REPO: igorferreir4/buildcaches
       CACHE_AMD64: ts3audiobot-0.12.2-amd64
       CACHE_ARM64: ts3audiobot-0.12.2-arm64
       IMAGE_REPO: igorferreir4/ts3audiobot
-      IMAGE_TAGS: stable,0.12.2
+      IMAGE_TAGS: 0.12.2,stable
     working_directory: ~/project/containers/ts3audiobot/0.12.2
     steps:
       - checkout:
@@ -96,40 +95,42 @@ jobs:
                 TAGS="$TAGS -t $IMAGE_REPO:$tag"
               done
               docker buildx build \
-                  --build-arg BUILDKIT_INLINE_CACHE=1 \
+                  --build-arg BUILDKIT_INLINE_CACHE=0 \
                   --cache-from="$CACHE_REPO:$CACHE_AMD64" \
                   --cache-from="$CACHE_REPO:$CACHE_ARM64" \
                   --push --platform=linux/amd64,linux/arm64/v8 $TAGS .
 
-   deploy-ts3audiobot:
-    executor: docker-docker
+  ts3audiobot-v0_12_2-deploy:
+    executor: docker-executor
     steps:
-      - add_ssh_keys:
-          fingerprints:
-            - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
+      ## Serve apenas se adicionar a key por projeto.
+      # - add_ssh_keys:
+      #     fingerprints:
+      #       - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
       - run:
-          name: Export date of build
+          name: Export date of build.
           command: |
+            mkdir ~/.ssh
+            echo "$SSH_KEY" | base64 --decode >> ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
             ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
-            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - Ts3audiobot-0.12.2" >> circleci-data.txt"
+            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - ts3audiobot 0.12.2" >> circleci-data.txt"
       # - run:
       #     name: Deploy to my server
       #     command: |
       #       ssh $SSH_USER@$SSH_HOST_IGOR_ARM "~/50GB/docker/executar-docker-compose-up-d.sh >> ~/circleci.txt 2>&1"
 
 workflows:
-   ts3audiobot-0.12.2:
-    when: 
-      or: 
-        - << pipeline.parameters.build-and-push >>
-        - << pipeline.parameters.run-all >>
+  ts3audiobot-0.12.2:
     jobs:
-      - build-ts3audiobot-cache-amd64
-      - build-ts3audiobot-cache-arm64
-      - build-ts3audiobot-multi-arch:
+      - ts3audiobot-v0_12_2-cache-amd64
+      - ts3audiobot-v0_12_2-cache-arm64
+
+      - ts3audiobot-v0_12_2-build-multi-arch:
           requires:
-            - build-ts3audiobot-cache-amd64
-            - build-ts3audiobot-cache-arm64
-      - deploy-ts3audiobot:
-          requires:
-            - build-ts3audiobot-multi-arch
+            - ts3audiobot-v0_12_2-cache-amd64
+            - ts3audiobot-v0_12_2-cache-arm64
+
+      # - ts3audiobot-v0_12_2-deploy:
+      #     requires:
+      #       - ts3audiobot-v0_12_2-build-multi-arch

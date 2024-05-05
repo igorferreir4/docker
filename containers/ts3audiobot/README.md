@@ -33,4 +33,5 @@ Or docker-compose.yml:
 ```
 
 # Tag: 
-## latest = alpha
+## latest = 0.13.0-alpha41
+## stable = 0.12.0

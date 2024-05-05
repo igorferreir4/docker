@@ -10,5 +10,5 @@ workflows:
     jobs:
       - path-filtering/filter:
           base-revision: main
-          config-path: .circleci/nothing-to-do.yml
+          config-path: .circleci/nada a fazer.yml
           mapping: .circleci/mapping.conf

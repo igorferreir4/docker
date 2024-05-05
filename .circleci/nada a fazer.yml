@@ -1,0 +1,21 @@
+version: 2.1
+
+executors:
+  docker-executor:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+
+jobs:
+  Nada a fazer:
+    executor: docker-executor
+    steps:
+      - run:
+          name: Nada a fazer.
+          command: |
+            echo "Nenhuma alteração encontrada."
+
+workflows:
+  nenhuma-alteração-encontrada:
+    jobs:
+      - Nada a fazer

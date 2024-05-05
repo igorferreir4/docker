@@ -1,4 +1,4 @@
-# FROM caddy:2.7.4-alpine
+# FROM caddy:2.7.6-alpine
 
 # RUN set -eux; \
 # 	apkArch="$(apk --print-arch)"; \
@@ -11,13 +11,6 @@
 # 	rm /usr/bin/caddy; \
 #     mv caddy /usr/bin; \
 #     chmod +x /usr/bin/caddy
-
-# # # Change TZ to America/Sao_Paulo
-# RUN apk add --update --no-cache tzdata && \
-#     cp /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime && \
-#     echo "America/Sao_Paulo" >  /etc/timezone && \
-#     apk del tzdata && \
-#     rm -rf /var/cache/apk/*
 
 FROM caddy:2.7.6-builder-alpine AS builder
 

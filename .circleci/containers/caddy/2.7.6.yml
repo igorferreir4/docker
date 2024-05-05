@@ -1,15 +1,20 @@
 version: 2.1
 
 executors:
-  docker-docker:
+  docker-executor:
     docker:
       - image: cimg/base:current
     resource_class: small
     
-  docker-machine:
+  machine-executor-amd64:
     machine:
       image: ubuntu-2204:current
     resource_class: large
+
+  machine-executor-arm64:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.large
 
 parameters:
   build-and-push:
@@ -36,11 +41,12 @@ commands:
             echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
 
 jobs:
-   build-caddy-cache-amd64:
-    executor: docker-machine
+  caddy-v2_7_6-cache-amd64:
+    executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: caddy-v2.7.6-amd64
+      CACHE_TAG: caddy-2.7.6-amd64
+      CACHE_TAG_OLD: caddy-2.7.6-amd64
     working_directory: ~/project/containers/caddy/2.7.6
     steps:
       - checkout:
@@ -49,18 +55,18 @@ jobs:
       - run:
           name: Build docker image
           command: |
-              docker buildx build \
-                  --build-arg BUILDKIT_INLINE_CACHE=1 \
-                  --cache-from="$CACHE_REPO:$CACHE_TAG" \
-                  --tag "$CACHE_REPO:$CACHE_TAG" \
-                  --push --platform=linux/amd64 .
+            docker buildx build \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
+              --cache-from="$CACHE_REPO:$CACHE_TAG" \
+              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
 
-   build-caddy-cache-arm64:
-    executor: docker-machine
-    resource_class: arm.large
+  caddy-v2_7_6-cache-arm64:
+    executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: caddy-v2.7.6-arm64
+      CACHE_TAG: caddy-2.7.6-arm64
+      CACHE_TAG_OLD: caddy-2.7.6-arm64
     working_directory: ~/project/containers/caddy/2.7.6
     steps:
       - checkout:
@@ -69,20 +75,20 @@ jobs:
       - run:
           name: Build docker image
           command: |
-              docker buildx build \
-                  --build-arg BUILDKIT_INLINE_CACHE=1 \
-                  --cache-from="$CACHE_REPO:$CACHE_TAG" \
-                  --tag "$CACHE_REPO:$CACHE_TAG" \
-                  --push --platform=linux/arm64/v8 .
+            docker buildx build \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
+              --cache-from="$CACHE_REPO:$CACHE_TAG" \
+              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
 
-   build-caddy-multi-arch:
-    executor: docker-machine
+  caddy-v2_7_6-build-multi-arch:
+    executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_AMD64: caddy-v2.7.6-amd64
-      CACHE_ARM64: caddy-v2.7.6-arm64
+      CACHE_AMD64: caddy-2.7.6-amd64
+      CACHE_ARM64: caddy-2.7.6-arm64
       IMAGE_REPO: igorferreir4/caddy
-      IMAGE_TAGS: latest,v2.7.6
+      IMAGE_TAGS: 2.7.6,latest
     working_directory: ~/project/containers/caddy/2.7.6
     steps:
       - checkout:
@@ -96,40 +102,45 @@ jobs:
                 TAGS="$TAGS -t $IMAGE_REPO:$tag"
               done
               docker buildx build \
-                  --build-arg BUILDKIT_INLINE_CACHE=1 \
+                  --build-arg BUILDKIT_INLINE_CACHE=0 \
                   --cache-from="$CACHE_REPO:$CACHE_AMD64" \
                   --cache-from="$CACHE_REPO:$CACHE_ARM64" \
                   --push --platform=linux/amd64,linux/arm64/v8 $TAGS .
 
-   deploy-caddy:
-    executor: docker-docker
+  caddy-v2_7_6-deploy:
+    executor: docker-executor
     steps:
-      - add_ssh_keys:
-          fingerprints:
-            - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
+      # - add_ssh_keys:
+      #     fingerprints:
+      #       - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
       - run:
-          name: Export date of build
+          name: Export date of build.
           command: |
+            mkdir ~/.ssh
+            echo "$SSH_KEY" | base64 --decode >> ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
             ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
-            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - Caddy v2.7.6" >> circleci-data.txt"
+            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - caddy 2.7.6" >> circleci-data.txt"
       # - run:
       #     name: Deploy to my server
       #     command: |
       #       ssh $SSH_USER@$SSH_HOST_IGOR_ARM "~/50GB/docker/executar-docker-compose-up-d.sh >> ~/circleci.txt 2>&1"
 
 workflows:
-   caddy-v2.7.6:
+  caddy-v2_7_6:
     when: 
       or: 
         - << pipeline.parameters.build-and-push >>
         - << pipeline.parameters.run-all >>
     jobs:
-      - build-caddy-cache-amd64
-      - build-caddy-cache-arm64
-      - build-caddy-multi-arch:
+      - caddy-v2_7_6-cache-amd64
+      - caddy-v2_7_6-cache-arm64
+
+      - caddy-v2_7_6-build-multi-arch:
           requires:
-            - build-caddy-cache-amd64
-            - build-caddy-cache-arm64
-      - deploy-caddy:
-          requires:
-            - build-caddy-multi-arch
+            - caddy-v2_7_6-cache-amd64
+            - caddy-v2_7_6-cache-arm64
+
+      # - caddy-v2_7_6-deploy:
+      #     requires:
+      #       - caddy-v2_7_6-build-multi-arch
