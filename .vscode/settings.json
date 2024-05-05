@@ -1,4 +1,0 @@
-{
-    "circleci.filters.branchFilter": "currentBranch",
-    "circleci.persistedProjectSelection": []
-}
