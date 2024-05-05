@@ -82,8 +82,32 @@ jobs:
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
 
   ts3audiobot-v0_13_0_alpha41-build-multi-arch:
-    executor: machine-executor-amd64
-    resource_class: medium
+    # executor: machine-executor-amd64
+    # resource_class: medium
+    # environment:
+    #   CACHE_REPO: igorferreir4/buildcaches
+    #   CACHE_AMD64: ts3audiobot-0.13.0-alpha41-amd64
+    #   CACHE_ARM64: ts3audiobot-0.13.0-alpha41-arm64
+    #   IMAGE_REPO: igorferreir4/ts3audiobot
+    #   IMAGE_TAGS: 0.13.0-alpha41,latest
+    # working_directory: ~/project/containers/ts3audiobot/0.13.0-alpha41
+    # steps:
+    #   - checkout:
+    #       path: ~/project
+    #   - setup-qemu
+    #   - run:
+    #       name: Build docker image
+    #       command: |
+    #           TAGS=""
+    #           for tag in $(echo $IMAGE_TAGS | tr "," " "); do
+    #             TAGS="$TAGS -t $IMAGE_REPO:$tag"
+    #           done
+    #           docker buildx build \
+    #               --build-arg BUILDKIT_INLINE_CACHE=0 \
+    #               --cache-from="$CACHE_REPO:$CACHE_AMD64" \
+    #               --cache-from="$CACHE_REPO:$CACHE_ARM64" \
+    #               --push --platform=linux/amd64,linux/arm64/v8 $TAGS .
+    executor: docker-executor
     environment:
       CACHE_REPO: igorferreir4/buildcaches
       CACHE_AMD64: ts3audiobot-0.13.0-alpha41-amd64
