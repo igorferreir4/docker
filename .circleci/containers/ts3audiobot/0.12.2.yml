@@ -16,6 +16,14 @@ executors:
       image: ubuntu-2204:current
     resource_class: arm.large
 
+parameters:
+  build-and-push:
+    type: boolean
+    default: false
+  run-all:
+    type: boolean
+    default: false
+
 commands:
   setup-qemu:
     steps:
@@ -122,6 +130,10 @@ jobs:
 
 workflows:
   ts3audiobot-0.12.2:
+    when: 
+      or: 
+        - << pipeline.parameters.build-and-push >>
+        - << pipeline.parameters.run-all >>  
     jobs:
       - ts3audiobot-v0_12_2-cache-amd64
       - ts3audiobot-v0_12_2-cache-arm64

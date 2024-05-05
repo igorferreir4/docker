@@ -16,6 +16,14 @@ executors:
       image: ubuntu-2204:current
     resource_class: arm.large
 
+parameters:
+  build-and-push:
+    type: boolean
+    default: false
+  run-all:
+    type: boolean
+    default: false
+
 commands:
   setup-qemu:
     steps:
@@ -128,6 +136,10 @@ jobs:
 
 workflows:
   php-8_3_6:
+    when: 
+      or: 
+        - << pipeline.parameters.build-and-push >>
+        - << pipeline.parameters.run-all >>
     jobs:
       - phpfpm-v8_3_6-cache-amd64
       - phpfpm-v8_3_6-cache-arm64

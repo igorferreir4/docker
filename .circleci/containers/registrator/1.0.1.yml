@@ -16,6 +16,14 @@ executors:
       image: ubuntu-2204:current
     resource_class: arm.large
 
+parameters:
+  build-and-push:
+    type: boolean
+    default: false
+  run-all:
+    type: boolean
+    default: false
+
 commands:
   setup-qemu:
     steps:
@@ -122,6 +130,10 @@ jobs:
 
 workflows:
   registrator-v1_0_1:
+    when: 
+      or: 
+        - << pipeline.parameters.build-and-push >>
+        - << pipeline.parameters.run-all >>  
     jobs:
       - registrator-v1_0_1-cache-amd64
       - registrator-v1_0_1-cache-arm64
