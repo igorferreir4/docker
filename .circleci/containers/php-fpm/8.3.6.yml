@@ -98,6 +98,14 @@ jobs:
                   --cache-from="$CACHE_REPO:$CACHE_AMD64" \
                   --cache-from="$CACHE_REPO:$CACHE_ARM64" \
                   --push --platform=linux/amd64,linux/arm64/v8 $TAGS .
+      - run:
+          name: Update Dockerhub README.
+          command: |
+            curl -X PATCH -H "Content-Type: application/json" \
+                -H "Authorization: JWT $DOCKERHUB_PASSWORD" \
+                --data-binary "@../README.md" \
+                "https://hub.docker.com/v2/repositories/$IMAGE_REPO/?detail=1" \
+                -o /dev/null -w "%{http_code}\n"
 
   phpfpm-v8_3_6-deploy:
     executor: docker-executor
