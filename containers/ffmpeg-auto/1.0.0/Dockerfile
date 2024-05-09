@@ -9,5 +9,5 @@ COPY watch_folder.sh /scripts/watch_folder.sh
 # Define o diretório de trabalho
 WORKDIR /scripts
 
-# Define o comando padrão a ser executado quando o container iniciar
+# Define o comando padrão a ser executado quando o container iniciar.
 CMD ["sh", "watch_folder.sh"]
