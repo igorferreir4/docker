@@ -23,6 +23,7 @@ move_folders() {
 while true; do
     inotifywait -r -e create --format '%w%f' /entrada/series /entrada/filmes | while read file; do
         if [ "${file##*.}" = "mkv" ]; then
+            sleep 15
             convert_files "$(dirname "$file")"
             move_folders "$(dirname "$file")"
         fi
