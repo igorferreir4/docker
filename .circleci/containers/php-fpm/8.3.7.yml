@@ -1,0 +1,156 @@
+version: 2.1
+
+executors:
+  docker-executor:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    
+  machine-executor-amd64:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large
+
+  machine-executor-arm64:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.large
+
+parameters:
+  build-and-push:
+    type: boolean
+    default: false
+  run-all:
+    type: boolean
+    default: false
+
+commands:
+  setup-qemu:
+    steps:
+      - run:
+          name: Setup Qemu
+          command: |
+            docker run --privileged --rm tonistiigi/binfmt --install all
+      - run:
+          name: Create builder
+          command: |
+            docker buildx create --name multi-arch-build --bootstrap --use
+      - run:
+          name: Login to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+
+jobs:
+  phpfpm-v8_3_7-cache-amd64:
+    executor: machine-executor-amd64
+    environment:
+      CACHE_REPO: igorferreir4/buildcaches
+      CACHE_TAG: php-8.3.7-amd64
+      CACHE_TAG_OLD: php-8.3.7-amd64
+    working_directory: ~/project/containers/php-fpm/8.3.7
+    steps:
+      - checkout:
+          path: ~/project
+      - setup-qemu
+      - run:
+          name: Build docker image
+          command: |
+            docker buildx build \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
+              --cache-from="$CACHE_REPO:$CACHE_TAG" \
+              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
+
+  phpfpm-v8_3_7-cache-arm64:
+    executor: machine-executor-arm64
+    environment:
+      CACHE_REPO: igorferreir4/buildcaches
+      CACHE_TAG: php-8.3.7-arm64
+      CACHE_TAG_OLD: php-8.3.7-arm64
+    working_directory: ~/project/containers/php-fpm/8.3.7
+    steps:
+      - checkout:
+          path: ~/project
+      - setup-qemu
+      - run:
+          name: Build docker image
+          command: |
+            docker buildx build \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
+              --cache-from="$CACHE_REPO:$CACHE_TAG" \
+              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
+
+  phpfpm-v8_3_7-build-multi-arch:
+    executor: machine-executor-amd64
+    resource_class: medium
+    environment:
+      CACHE_REPO: igorferreir4/buildcaches
+      CACHE_AMD64: php-8.3.7-amd64
+      CACHE_ARM64: php-8.3.7-arm64
+      IMAGE_REPO: igorferreir4/php-fpm
+      IMAGE_TAGS: 8.3.7,latest
+    working_directory: ~/project/containers/php-fpm/8.3.7
+    steps:
+      - checkout:
+          path: ~/project
+      - setup-qemu
+      - run:
+          name: Build docker image
+          command: |
+              TAGS=""
+              for tag in $(echo $IMAGE_TAGS | tr "," " "); do
+                TAGS="$TAGS -t $IMAGE_REPO:$tag"
+              done
+              docker buildx build \
+                  --build-arg BUILDKIT_INLINE_CACHE=0 \
+                  --cache-from="$CACHE_REPO:$CACHE_AMD64" \
+                  --cache-from="$CACHE_REPO:$CACHE_ARM64" \
+                  --push --platform=linux/amd64,linux/arm64/v8 $TAGS .
+      - run:
+          name: Update Dockerhub README.
+          command: |
+            PAYLOAD="username=$DOCKERHUB_USERNAME&password=$DOCKERHUB_PASSWORD"
+            JWT=$(curl -s -d "$PAYLOAD" https://hub.docker.com/v2/users/login/ | jq -r .token)
+            HEADER="Authorization: JWT $JWT"
+            URL="https://hub.docker.com/v2/repositories/$IMAGE_REPO/"
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH -H "$HEADER" -H 'Content-type: application/json' --data "{\"full_description\": $(jq -Rs '.' ../README.md)}" $URL)
+
+            if [ $STATUS -eq 200 ]; then
+              echo "README atualizado com sucesso!"
+            else
+              echo "Não foi possivel atualizar o README"
+              echo "Erro: $STATUS"
+              exit 1
+            fi
+
+  phpfpm-v8_3_7-deploy:
+    executor: docker-executor
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
+      - run:
+          name: Export date of build.
+          command: |
+            ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
+            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - PHP-FPM v8.3.7" >> circleci-builds.txt"
+
+workflows:
+  php-8_3_6:
+    when: 
+      or: 
+        - << pipeline.parameters.build-and-push >>
+        - << pipeline.parameters.run-all >>
+    jobs:
+      - phpfpm-v8_3_7-cache-amd64
+      - phpfpm-v8_3_7-cache-arm64
+
+      - phpfpm-v8_3_7-build-multi-arch:
+          requires:
+            - phpfpm-v8_3_7-cache-amd64
+            - phpfpm-v8_3_7-cache-arm64
+
+      - phpfpm-v8_3_7-deploy:
+          requires:
+            - phpfpm-v8_3_7-build-multi-arch
