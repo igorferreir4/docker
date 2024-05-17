@@ -47,16 +47,16 @@ RUN docker-php-ext-configure pdo_mysql --with-pdo-mysql=mysqlnd \
     && docker-php-ext-configure mysqli --with-mysqli=mysqlnd \
     && docker-php-ext-install pdo_mysql
 
-RUN set -eux; \
-	docker-php-ext-enable opcache; \
-	{ \
-		echo 'opcache.memory_consumption=128'; \
-		echo 'opcache.interned_strings_buffer=8'; \
-		echo 'opcache.max_accelerated_files=4000'; \
-		echo 'opcache.revalidate_freq=60'; \
-		echo 'opcache.fast_shutdown=1'; \
-		echo 'opcache.enable_cli=1'; \
-	} > /usr/local/etc/php/conf.d/opcache-recommended.ini
+# RUN set -eux; \
+# 	docker-php-ext-enable opcache; \
+# 	{ \
+# 		echo 'opcache.memory_consumption=128'; \
+# 		echo 'opcache.interned_strings_buffer=8'; \
+# 		echo 'opcache.max_accelerated_files=4000'; \
+# 		echo 'opcache.revalidate_freq=60'; \
+# 		echo 'opcache.fast_shutdown=1'; \
+# 		echo 'opcache.enable_cli=1'; \
+# 	} > /usr/local/etc/php/conf.d/opcache-recommended.ini
 
 RUN { \
 		echo 'error_reporting = E_ERROR | E_WARNING | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_RECOVERABLE_ERROR'; \
