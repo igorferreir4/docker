@@ -20,7 +20,8 @@ RUN apk update && apk add --no-cache \
 	libjxl \
 	libraw \
 	librsvg \
-	gettext \
+	gettext-dev \
+	libintl \
 	# php83-curl \
 	# php83-dom \
 	# php83-exif \
@@ -35,8 +36,7 @@ RUN apk update && apk add --no-cache \
 	# php83-pcntl \
 	# php83-mysqli \
 	php83-pecl-igbinary \
-	php83-pecl-apcu \
-	php83-gettext
+	php83-pecl-apcu
 	# php83-dev
 
 # Configura e instala as extensões PHP
