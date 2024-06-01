@@ -41,7 +41,7 @@ RUN apk update && apk add --no-cache \
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) gd \
     && docker-php-ext-install -j$(nproc) intl \
-    && docker-php-ext-install exif zip opcache mysqli pdo_mysql
+    && docker-php-ext-install exif zip opcache mysqli pdo_mysql gettext
 
 RUN docker-php-ext-configure pdo_mysql --with-pdo-mysql=mysqlnd \
     && docker-php-ext-configure mysqli --with-mysqli=mysqlnd \
