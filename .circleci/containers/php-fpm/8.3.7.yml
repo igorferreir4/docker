@@ -137,7 +137,7 @@ jobs:
             ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo Executado em "$(date -d "-3 hours" +"%d/%m/%G - %Hh:%Mm:%Ss") - PHP-FPM v8.3.7" >> circleci-builds.txt"
 
 workflows:
-  php-8_3_6:
+  php-8_3_7:
     when: 
       or: 
         - << pipeline.parameters.build-and-push >>
