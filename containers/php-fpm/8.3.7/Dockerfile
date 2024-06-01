@@ -22,6 +22,7 @@ RUN apk update && apk add --no-cache \
 	librsvg \
 	gettext-dev \
 	libintl \
+	libxml2-dev \
 	# php83-curl \
 	# php83-dom \
 	# php83-exif \
@@ -43,7 +44,7 @@ RUN apk update && apk add --no-cache \
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) gd \
     && docker-php-ext-install -j$(nproc) intl \
-    && docker-php-ext-install exif zip opcache mysqli pdo_mysql gettext
+    && docker-php-ext-install exif zip opcache mysqli pdo_mysql gettext xml mbstring
 
 RUN docker-php-ext-configure pdo_mysql --with-pdo-mysql=mysqlnd \
     && docker-php-ext-configure mysqli --with-mysqli=mysqlnd \
