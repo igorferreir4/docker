@@ -50,7 +50,7 @@ run_step "🔁  - Removendo pacotes antigos do Docker" \
 run_step "🔄  - Atualizando índices dos pacotes" \
   sudo apt-get update -y
 
-run_step "⬆️  - Atualizando pacotes instalados" \
+run_step "🔄  - Atualizando pacotes instalados" \
   sudo apt-get upgrade -y
 
 run_step "📦  - Instalando dependências e programas padrões" \
