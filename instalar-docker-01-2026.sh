@@ -54,22 +54,22 @@ run_step "🌐  - Configurando timezone America/Sao_Paulo" \
 # Remoção de versões antigas
 # ===============================
 run_step "🧹  - Removendo pacotes antigos do Docker" \
-  bash -c 'sudo apt remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc 2>/dev/null | cut -f1) || true'
+  bash -c 'sudo apt-get remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc 2>/dev/null | cut -f1) || true'
 
 # ===============================
 # Atualização do sistema
 # ===============================
 run_step "🔄  - Atualizando índices dos pacotes" \
-  sudo apt update -y
+  sudo apt-get update -y
 
 run_step "⬆  - Atualizando pacotes instalados" \
-  sudo apt upgrade -y
+  sudo apt-get upgrade -y
 
 # ===============================
 # Dependências básicas
 # ===============================
 run_step "📦  - Instalando dependências" \
-  sudo apt install -y ca-certificates curl htop wget nano zip unzip iputils-ping
+  sudo apt-get install -y ca-certificates curl htop wget nano zip unzip iputils-ping
 
 # ===============================
 # Chave GPG do Docker
