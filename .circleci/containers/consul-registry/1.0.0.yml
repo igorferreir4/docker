@@ -72,7 +72,7 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      # - setup-qemu
+      - setup-qemu
       - run:
           name: Build docker image (amd64 cache)
           command: |
@@ -98,7 +98,7 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      # - setup-qemu
+      - setup-qemu
       - run:
           name: Build docker image (arm64 cache)
           command: |
