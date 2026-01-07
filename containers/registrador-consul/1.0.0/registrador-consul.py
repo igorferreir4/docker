@@ -157,16 +157,26 @@ def services_from_container(container):
             port_to_register = label_port
             logging.debug(f"{container.name}/{service_name}: Porta do container: {label_port}")
         else:
-            # Modo 2: Usar porta exposta no host
-            # Procura qualquer porta mapeada no host (ignora qual porta interna)
+            # Modo 2: Mapeamento automático inteligente
+            # Procurar qual porta do host mapeia para a porta do container (da label)
+            port_key = f"{label_port}/tcp"
             port_to_register = None
             
-            for port_key, port_bindings in ports.items():
-                if port_bindings and len(port_bindings) > 0:
-                    host_port = int(port_bindings[0]["HostPort"])
-                    port_to_register = host_port
-                    logging.debug(f"{container.name}/{service_name}: Porta do host: {host_port}")
-                    break
+            if port_key in ports and ports[port_key] and len(ports[port_key]) > 0:
+                # Encontrou mapeamento específico para esta porta
+                host_port = int(ports[port_key][0]["HostPort"])
+                port_to_register = host_port
+                logging.debug(
+                    f"{container.name}/{service_name}: "
+                    f"Porta {label_port} mapeada para host {host_port}"
+                )
+            else:
+                # Fallback: se não encontrou mapeamento específico, avisar
+                logging.warning(
+                    f"{container.name}/{service_name}: "
+                    f"Porta {label_port} não está exposta no host"
+                )
+                continue
             
             if not port_to_register:
                 logging.warning(
@@ -174,18 +184,34 @@ def services_from_container(container):
                 )
                 continue
 
-        # Coletar tags do Traefik
+        # Coletar tags do Traefik específicas deste serviço
         tags = []
         for key, value in labels.items():
             if key.startswith("traefik."):
-                # Decidir se inclui ou não a label de porta
-                if key.endswith(".loadbalancer.server.port"):
-                    if USE_LABEL_PORT:
-                        tags.append(f"{key}={value}")
-                    else:
-                        logging.debug(f"{container.name}: Ignorando label de porta: {key}")
-                else:
+                # Verificar se a label pertence a este serviço específico
+                # Exemplos:
+                # - traefik.enable (global, incluir sempre)
+                # - traefik.http.services.caddy85.* (específico do serviço caddy85)
+                # - traefik.http.routers.caddy85.* (específico do serviço caddy85)
+                
+                # Labels globais (sem nome de serviço específico)
+                if ".services." not in key and ".routers." not in key:
+                    # Label global como traefik.enable
                     tags.append(f"{key}={value}")
+                    continue
+                
+                # Labels específicas de serviço
+                # Formato: traefik.http.services.<SERVICE_NAME>.*
+                # ou: traefik.http.routers.<ROUTER_NAME>.*
+                if f".services.{service_name}." in key or f".routers.{service_name}." in key:
+                    # Decidir se inclui ou não a label de porta
+                    if key.endswith(".loadbalancer.server.port"):
+                        if USE_LABEL_PORT:
+                            tags.append(f"{key}={value}")
+                        else:
+                            logging.debug(f"{container.name}/{service_name}: Ignorando label de porta: {key}")
+                    else:
+                        tags.append(f"{key}={value}")
 
         # Criar ID único do serviço
         service_id = f"{service_name}-{container.short_id}"
