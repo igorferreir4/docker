@@ -62,13 +62,13 @@ commands:
             "
 
 jobs:
-  consul-registry-v1_0_0-cache-amd64:
+  registrador-consul-v1_0_0-cache-amd64:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: consul-registry-1.0.0-amd64
-      CACHE_TAG_OLD: consul-registry-1.0.0-amd64
-    working_directory: ~/project/containers/consul-registry/1.0.0
+      CACHE_TAG: registrador-consul-1.0.0-amd64
+      CACHE_TAG_OLD: registrador-consul-1.0.0-amd64
+    working_directory: ~/project/containers/registrador-consul/1.0.0
     steps:
       - checkout:
           path: ~/project
@@ -88,13 +88,13 @@ jobs:
           image_name: "test-image:amd64"
           platform: "linux/amd64"
 
-  consul-registry-v1_0_0-cache-arm64:
+  registrador-consul-v1_0_0-cache-arm64:
     executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: consul-registry-1.0.0-arm64
-      CACHE_TAG_OLD: consul-registry-1.0.0-arm64
-    working_directory: ~/project/containers/consul-registry/1.0.0
+      CACHE_TAG: registrador-consul-1.0.0-arm64
+      CACHE_TAG_OLD: registrador-consul-1.0.0-arm64
+    working_directory: ~/project/containers/registrador-consul/1.0.0
     steps:
       - checkout:
           path: ~/project
@@ -114,15 +114,15 @@ jobs:
           image_name: "test-image:arm64"
           platform: "linux/arm64/v8"
 
-  consul-registry-v1_0_0-build-multi-arch:
+  registrador-consul-v1_0_0-build-multi-arch:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_AMD64: consul-registry-1.0.0-amd64
-      CACHE_ARM64: consul-registry-1.0.0-arm64
-      IMAGE_REPO: igorferreir4/consul-registry
+      CACHE_AMD64: registrador-consul-1.0.0-amd64
+      CACHE_ARM64: registrador-consul-1.0.0-arm64
+      IMAGE_REPO: igorferreir4/registrador-consul
       IMAGE_TAGS: 1.0.0,latest
-    working_directory: ~/project/containers/consul-registry/1.0.0
+    working_directory: ~/project/containers/registrador-consul/1.0.0
     steps:
       - checkout:
           path: ~/project
@@ -208,15 +208,15 @@ jobs:
             fi
 
 workflows:
-  consul-registry-v1_0_0-workflow:
+  registrador-consul-v1_0_0-workflow:
     when: 
       or: 
         - << pipeline.parameters.build-and-push >>
         - << pipeline.parameters.run-all >>  
     jobs:
-      - consul-registry-v1_0_0-cache-amd64
-      - consul-registry-v1_0_0-cache-arm64
-      - consul-registry-v1_0_0-build-multi-arch:
+      - registrador-consul-v1_0_0-cache-amd64
+      - registrador-consul-v1_0_0-cache-arm64
+      - registrador-consul-v1_0_0-build-multi-arch:
           requires:
-            - consul-registry-v1_0_0-cache-amd64
-            - consul-registry-v1_0_0-cache-arm64
+            - registrador-consul-v1_0_0-cache-amd64
+            - registrador-consul-v1_0_0-cache-arm64
