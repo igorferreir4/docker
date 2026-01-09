@@ -55,7 +55,6 @@ commands:
             docker network create teste
             docker run --name consul --hostname consul --network=teste -p 8500:8500 -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1
             sleep 5
-            curl http://localhost:8500/v1/status/leader
             docker logs consul
             docker run --rm --network=teste -v /var/run/docker.sock:/var/run/docker.sock:ro $PLATFORM_FLAG << parameters.image_name >> python -c "
             import docker
