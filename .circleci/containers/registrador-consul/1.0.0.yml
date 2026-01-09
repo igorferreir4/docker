@@ -52,6 +52,7 @@ commands:
             fi
             
             echo "Testing image << parameters.image_name >>..."
+            docker run --name consul -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1
             docker run --rm $PLATFORM_FLAG << parameters.image_name >> python -c "
             import docker
             import requests
@@ -83,9 +84,9 @@ jobs:
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max \
               --platform=linux/amd64 \
               --load \
-              -t test-image:amd64 .
+              -t app:amd64 .
       - test-image:
-          image_name: "test-image:amd64"
+          image_name: "app:amd64"
           platform: "linux/amd64"
 
   registrador-consul-v1_0_0-cache-arm64:
@@ -109,9 +110,9 @@ jobs:
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max \
               --platform=linux/arm64/v8 \
               --load \
-              -t test-image:arm64 .
+              -t app:arm64 .
       - test-image:
-          image_name: "test-image:arm64"
+          image_name: "app:arm64"
           platform: "linux/arm64/v8"
 
   registrador-consul-v1_0_0-build-multi-arch:

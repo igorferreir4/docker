@@ -6,8 +6,11 @@ LABEL version="1.0.0"
 
 WORKDIR /app
 
+COPY requirements.txt .
+
 # Instalar dependências
-RUN pip install --no-cache-dir docker requests
+#RUN pip install --no-cache-dir docker requests
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar código
 COPY main.py .
