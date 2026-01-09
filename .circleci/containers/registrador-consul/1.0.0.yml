@@ -53,7 +53,7 @@ commands:
             
             echo "Testing image << parameters.image_name >>..."
             docker run --name consul -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1
-            docker run --rm $PLATFORM_FLAG << parameters.image_name >> python -c "
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:ro $PLATFORM_FLAG << parameters.image_name >> python -c "
             import docker
             import requests
             import sys
