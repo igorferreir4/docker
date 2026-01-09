@@ -398,7 +398,7 @@ def resync_loop():
 
 if __name__ == "__main__":
     logging.info("╔══════════════════════════════════════════════════════╗")
-    logging.info("║   Docker → Consul Service Registry                  ║")
+    logging.info("║              Registrador Docker → Consul             ║")
     logging.info("╚══════════════════════════════════════════════════════╝")
     logging.info("")
     logging.info("Configuração:")

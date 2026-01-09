@@ -1,7 +1,7 @@
-FROM python:3.14-slim
+FROM python:3.14-alpine
 
 LABEL maintainer="Igor Ferreira"
-LABEL description="Docker to Consul Service Registry"
+LABEL description="Registrador Docker > Consul"
 LABEL version="1.0.0"
 
 WORKDIR /app
@@ -10,17 +10,20 @@ WORKDIR /app
 RUN pip install --no-cache-dir docker requests
 
 # Copiar código
-COPY registrador-consul.py .
+COPY main.py .
 
 # Variáveis de ambiente padrão
 ENV IP="" \
-    USE_CONTAINER_PORT="false" \
-    USE_LABEL_PORT="true" \
+    MODE="container" \
     CONSUL_URL="http://consul:8500" \
     RESYNC_INTERVAL="120" \
     DOCKER_SOCKET="" \
     DEREGISTER_RETRIES="3" \
     DEREGISTER_RETRY_DELAY="2"
 
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget --quiet --tries=1 --spider ${CONSUL_URL}/v1/status/leader || exit 1
+
 # Executar
-CMD ["python", "-u", "registrador-consul.py"]
+ENTRYPOINT ["python", "-u", "main.py"]
