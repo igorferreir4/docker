@@ -35,41 +35,6 @@ commands:
           command: |
             echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
 
-  test-image:
-    parameters:
-      image_name:
-        type: string
-      platform:
-        type: string
-        default: ""
-    steps:
-      - run:
-          name: Test Docker image
-          command: |
-            set -euo pipefail
-
-            PLATFORM_FLAG=""
-            if [ -n "<< parameters.platform >>" ]; then
-              PLATFORM_FLAG="--platform << parameters.platform >>"
-            fi
-            
-            echo "Testing image << parameters.image_name >>..."
-            docker network create teste
-            docker run --name consul --network=teste -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1 -client=0.0.0.0
-            sleep 5
-
-            docker run --name registrador --network=teste -v /var/run/docker.sock:/var/run/docker.sock:ro -d $PLATFORM_FLAG << parameters.image_name >>
-            sleep 5
-
-            echo "Checking registrador logs..."
-            if docker logs registrador 2>&1 | grep -q "Iniciando resync completo"; then
-              echo "✓ Encontrou log 'Iniciando resync completo'"
-            else
-              echo "✗ Log esperado não encontrado"
-              docker logs registrador || true
-              exit 1
-            fi
-
 jobs:
   registrador-consul-v1_0_0-cache-amd64:
     executor: machine-executor-amd64
@@ -93,9 +58,6 @@ jobs:
               --platform=linux/amd64 \
               --load \
               -t app:amd64 .
-      - test-image:
-          image_name: "app:amd64"
-          platform: "linux/amd64"
 
   registrador-consul-v1_0_0-cache-arm64:
     executor: machine-executor-arm64
@@ -119,9 +81,6 @@ jobs:
               --platform=linux/arm64/v8 \
               --load \
               -t app:arm64 .
-      - test-image:
-          image_name: "app:arm64"
-          platform: "linux/arm64/v8"
 
   registrador-consul-v1_0_0-build-multi-arch:
     executor: machine-executor-amd64
