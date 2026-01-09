@@ -31,7 +31,7 @@ class Config:
         self.IP = os.getenv("IP", "").strip('"')
         
         # URL do Consul
-        self.CONSUL_URL = os.getenv("CONSUL_URL", "http://consul2:8500").strip('"')
+        self.CONSUL_URL = os.getenv("CONSUL_URL", "http://consul:8500").strip('"')
         
         # Intervalo de resync em segundos
         self.RESYNC_INTERVAL = int(os.getenv("RESYNC_INTERVAL", "60").strip('"'))

@@ -55,7 +55,7 @@ commands:
             
             echo "Testing image << parameters.image_name >>..."
             docker network create teste
-            docker run --name consul --network=teste -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1 -client=0.0.0.0
+            docker run --name consul2 --network=teste -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1 -client=0.0.0.0
             sleep 5
 
             docker run --name registrador --network=teste -v /var/run/docker.sock:/var/run/docker.sock:ro -d $PLATFORM_FLAG << parameters.image_name >>
