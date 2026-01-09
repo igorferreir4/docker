@@ -46,6 +46,8 @@ commands:
       - run:
           name: Test Docker image
           command: |
+            set -euo pipefail
+
             PLATFORM_FLAG=""
             if [ -n "<< parameters.platform >>" ]; then
               PLATFORM_FLAG="--platform << parameters.platform >>"
@@ -53,16 +55,20 @@ commands:
             
             echo "Testing image << parameters.image_name >>..."
             docker network create teste
-            docker run --name consul --hostname consul --network=teste -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1 -client=0.0.0.0
+            docker run --name consul --network=teste -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1 -client=0.0.0.0
             sleep 5
-            docker run --rm --network=teste -v /var/run/docker.sock:/var/run/docker.sock:ro $PLATFORM_FLAG << parameters.image_name >> python -c "
-            import docker
-            import requests
-            import sys
-            print('✓ Imports OK')
-            print('✓ Python version:', sys.version)
-            print('✓ Image validated successfully')
-            "
+
+            docker run --name registrador --network=teste -v /var/run/docker.sock:/var/run/docker.sock:ro -d $PLATFORM_FLAG << parameters.image_name >>
+            sleep 5
+
+            echo "Checking registrador logs..."
+            if docker logs registrador 2>&1 | grep -q "Iniciando resync completo"; then
+              echo "✓ Encontrou log 'Iniciando resync completo'"
+            else
+              echo "✗ Log esperado não encontrado"
+              docker logs registrador || true
+              exit 1
+            fi
 
 jobs:
   registrador-consul-v1_0_0-cache-amd64:
