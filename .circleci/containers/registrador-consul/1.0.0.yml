@@ -53,7 +53,8 @@ commands:
             
             echo "Testing image << parameters.image_name >>..."
             docker network create teste
-            docker run --name consul --network=teste -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1
+            docker run --name consul --hostname consul --network=teste -d hashicorp/consul:1.22 agent -server -bootstrap-expect=1
+            sleep 5
             docker run --rm --network=teste -v /var/run/docker.sock:/var/run/docker.sock:ro $PLATFORM_FLAG << parameters.image_name >> python -c "
             import docker
             import requests
