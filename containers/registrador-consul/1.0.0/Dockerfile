@@ -1,7 +1,7 @@
 FROM python:3.14-alpine
 
 LABEL maintainer="Igor Ferreira"
-LABEL description="Registrador Docker > Consul"
+LABEL description="Registrador Docker > Consul > Traefik"
 LABEL version="1.0.0"
 
 WORKDIR /app
