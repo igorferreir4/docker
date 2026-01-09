@@ -13,7 +13,7 @@ import docker
 import requests
 
 # ============================================
-# CONFIGURAÇÃO DE LOGGING.
+# CONFIGURAÇÃO DE LOGGING
 # ============================================
 
 logging.basicConfig(
