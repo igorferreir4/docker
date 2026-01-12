@@ -9,7 +9,6 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Instalar dependências
-#RUN pip install --no-cache-dir docker requests
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar código
@@ -25,8 +24,8 @@ ENV IP="" \
     DEREGISTER_RETRY_DELAY="2"
 
 # Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget --quiet --tries=1 --spider ${CONSUL_URL}/v1/status/leader || exit 1
+# HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+#     CMD wget --quiet --tries=1 --spider ${CONSUL_URL}/v1/status/leader || exit 1
 
 # Executar
 ENTRYPOINT ["python", "-u", "main.py"]
