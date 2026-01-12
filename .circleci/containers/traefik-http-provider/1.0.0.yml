@@ -46,18 +46,21 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - setup-qemu
+      - run:
+          name: Login to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
       - run:
           name: Build docker image (amd64 cache)
           command: |
+            docker buildx create --use --name amd64-builder --driver docker-container || docker buildx use amd64-builder
             docker buildx build \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
               --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
               --cache-from="$CACHE_REPO:$CACHE_TAG" \
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max \
               --platform=linux/amd64 \
-              --load \
-              -t app:amd64 .
+              .
 
   build-cache-arm64:
     executor: machine-executor-arm64
@@ -69,18 +72,21 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - setup-qemu
+      - run:
+          name: Login to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
       - run:
           name: Build docker image (arm64 cache)
           command: |
+            docker buildx create --use --name arm64-builder --driver docker-container || docker buildx use arm64-builder
             docker buildx build \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
               --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
               --cache-from="$CACHE_REPO:$CACHE_TAG" \
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max \
               --platform=linux/arm64/v8 \
-              --load \
-              -t app:arm64 .
+              .
 
   build-multi-arch:
     executor: machine-executor-amd64
@@ -126,54 +132,6 @@ jobs:
                 exit 1
               fi
             done
-      - run:
-          name: Security scan with Trivy
-          command: |
-            echo "Installing Trivy..."
-            wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-            echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-            sudo apt-get update
-            sudo apt-get install -y trivy
-            
-            echo "Scanning image for vulnerabilities..."
-            trivy image --severity HIGH,CRITICAL --exit-code 0 $IMAGE_REPO:latest
-      - run:
-          name: Update Docker Hub README
-          command: |
-            echo "Preparing README content..."
-            README_CONTENT=$(jq -Rs '.' ../README.md)
-            
-            if [ $? -ne 0 ]; then
-              echo "✗ Error processing README with jq"
-              exit 1
-            fi
-            
-            echo "Authenticating with Docker Hub..."
-            PAYLOAD="username=$DOCKERHUB_USERNAME&password=$DOCKERHUB_PASSWORD"
-            JWT=$(curl -s -d "$PAYLOAD" https://hub.docker.com/v2/users/login/ | jq -r .token)
-            
-            if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
-              echo "✗ Failed to authenticate with Docker Hub"
-              exit 1
-            fi
-            
-            echo "Updating README..."
-            HEADER="Authorization: JWT $JWT"
-            URL="https://hub.docker.com/v2/repositories/$IMAGE_REPO/"
-            
-            STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
-              -X PATCH \
-              -H "$HEADER" \
-              -H 'Content-type: application/json' \
-              --data "{\"full_description\": $README_CONTENT}" \
-              $URL)
-            
-            if [ $STATUS -eq 200 ]; then
-              echo "✓ README updated successfully!"
-            else
-              echo "✗ Failed to update README (HTTP $STATUS)"
-              exit 1
-            fi
 
   build-cache-amd64-alpine:
     executor: machine-executor-amd64
@@ -185,10 +143,14 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - setup-qemu
       - run:
-          name: Build docker image (amd64 cache)
+          name: Login to Docker Hub
           command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - run:
+          name: Build docker image (amd64 alpine cache)
+          command: |
+            docker buildx create --use --name amd64-alpine-builder --driver docker-container || docker buildx use amd64-alpine-builder
             docker buildx build \
               -f Dockerfile.alpine \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
@@ -196,8 +158,7 @@ jobs:
               --cache-from="$CACHE_REPO:$CACHE_TAG" \
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max \
               --platform=linux/amd64 \
-              --load \
-              -t app:amd64 .
+              .
 
   build-cache-arm64-alpine:
     executor: machine-executor-arm64
@@ -209,10 +170,14 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - setup-qemu
       - run:
-          name: Build docker image (arm64 cache)
+          name: Login to Docker Hub
           command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - run:
+          name: Build docker image (arm64 alpine cache)
+          command: |
+            docker buildx create --use --name arm64-alpine-builder --driver docker-container || docker buildx use arm64-alpine-builder
             docker buildx build \
               -f Dockerfile.alpine \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
@@ -220,8 +185,7 @@ jobs:
               --cache-from="$CACHE_REPO:$CACHE_TAG" \
               --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max \
               --platform=linux/arm64/v8 \
-              --load \
-              -t app:arm64 .
+              .
 
   build-multi-arch-alpine:
     executor: machine-executor-amd64
@@ -269,6 +233,68 @@ jobs:
               fi
             done
 
+  post-build-tasks:
+    executor: machine-executor-amd64
+    environment:
+      IMAGE_REPO: igorferreir4/traefik-http-provider
+    working_directory: ~/project/containers/traefik-http-provider/1.0.0
+    steps:
+      - checkout:
+          path: ~/project
+      - run:
+          name: Install Trivy (optimized)
+          command: |
+            echo "Installing Trivy..."
+            wget -qO trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.48.3/trivy_0.48.3_Linux-64bit.tar.gz
+            tar zxf trivy.tar.gz
+            sudo mv trivy /usr/local/bin/
+            trivy --version
+      - run:
+          name: Security scan with Trivy
+          command: |
+            echo "Scanning regular image..."
+            trivy image --severity HIGH,CRITICAL --exit-code 0 $IMAGE_REPO:latest
+            echo ""
+            echo "Scanning alpine image..."
+            trivy image --severity HIGH,CRITICAL --exit-code 0 $IMAGE_REPO:latest-alpine
+      - run:
+          name: Update Docker Hub README
+          command: |
+            echo "Preparing README content..."
+            README_CONTENT=$(jq -Rs '.' ../README.md)
+            
+            if [ $? -ne 0 ]; then
+              echo "✗ Error processing README with jq"
+              exit 1
+            fi
+            
+            echo "Authenticating with Docker Hub..."
+            PAYLOAD="username=$DOCKERHUB_USERNAME&password=$DOCKERHUB_PASSWORD"
+            JWT=$(curl -s -d "$PAYLOAD" https://hub.docker.com/v2/users/login/ | jq -r .token)
+            
+            if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
+              echo "✗ Failed to authenticate with Docker Hub"
+              exit 1
+            fi
+            
+            echo "Updating README..."
+            HEADER="Authorization: JWT $JWT"
+            URL="https://hub.docker.com/v2/repositories/$IMAGE_REPO/"
+            
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+              -X PATCH \
+              -H "$HEADER" \
+              -H 'Content-type: application/json' \
+              --data "{\"full_description\": $README_CONTENT}" \
+              $URL)
+            
+            if [ $STATUS -eq 200 ]; then
+              echo "✓ README updated successfully!"
+            else
+              echo "✗ Failed to update README (HTTP $STATUS)"
+              exit 1
+            fi
+
 workflows:
   traefik-http-provider-v1_0_0-workflow:
     when: 
@@ -287,4 +313,8 @@ workflows:
       - build-multi-arch-alpine:
           requires:
             - build-cache-amd64-alpine
-            - build-cache-arm64-alpine          
+            - build-cache-arm64-alpine
+      - post-build-tasks:
+          requires:
+            - build-multi-arch
+            - build-multi-arch-alpine          
