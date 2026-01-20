@@ -101,11 +101,11 @@ jobs:
       - run:
           name: Load version
           command: |
-            echo "export IMAGE_VERSION=$(cat VERSION)" >> "$BASH_ENV"
+            echo "export BASE_TAGS=$(cat VERSION)" >> "$BASH_ENV"
       - run:
           name: Build and push multi-arch image
           command: |
-            IMAGE_TAGS="${IMAGE_VERSION},latest"
+            IMAGE_TAGS="$BASE_TAGS"
             EFFECTIVE_TAGS="$IMAGE_TAGS"
             if [ "$CIRCLE_BRANCH" != "main" ] && [ -n "$CIRCLE_BRANCH" ]; then
               EFFECTIVE_TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n" | grep -v '^latest$' | paste -sd "," -)
@@ -129,7 +129,7 @@ jobs:
           name: Verify pushed images
           command: |
             echo "Verifying images were pushed successfully..."
-            IMAGE_TAGS="${IMAGE_VERSION},latest"
+            IMAGE_TAGS="$BASE_TAGS"
             EFFECTIVE_TAGS="$IMAGE_TAGS"
             if [ "$CIRCLE_BRANCH" != "main" ] && [ -n "$CIRCLE_BRANCH" ]; then
               EFFECTIVE_TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n" | grep -v '^latest$' | paste -sd "," -)
@@ -209,11 +209,11 @@ jobs:
       - run:
           name: Load version
           command: |
-            echo "export IMAGE_VERSION=$(cat VERSION)" >> "$BASH_ENV"
+            echo "export BASE_TAGS=$(cat VERSION)" >> "$BASH_ENV"
       - run:
           name: Build and push multi-arch image
           command: |
-            IMAGE_TAGS="${IMAGE_VERSION}-alpine,latest-alpine"
+            IMAGE_TAGS=$(echo "$BASE_TAGS" | tr "," "\n" | sed 's/$/-alpine/' | paste -sd "," -)
             EFFECTIVE_TAGS="$IMAGE_TAGS"
             if [ "$CIRCLE_BRANCH" != "main" ] && [ -n "$CIRCLE_BRANCH" ]; then
               EFFECTIVE_TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n" | grep -v '^latest-alpine$' | paste -sd "," -)
@@ -238,7 +238,7 @@ jobs:
           name: Verify pushed images
           command: |
             echo "Verifying images were pushed successfully..."
-            IMAGE_TAGS="${IMAGE_VERSION}-alpine,latest-alpine"
+            IMAGE_TAGS=$(echo "$BASE_TAGS" | tr "," "\n" | sed 's/$/-alpine/' | paste -sd "," -)
             EFFECTIVE_TAGS="$IMAGE_TAGS"
             if [ "$CIRCLE_BRANCH" != "main" ] && [ -n "$CIRCLE_BRANCH" ]; then
               EFFECTIVE_TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n" | grep -v '^latest-alpine$' | paste -sd "," -)
