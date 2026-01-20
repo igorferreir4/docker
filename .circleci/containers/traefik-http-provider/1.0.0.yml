@@ -44,8 +44,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: traefik-http-provider-1.0.0-amd64
-      CACHE_TAG_OLD: traefik-http-provider-1.0.0-amd64
+      CACHE_TAG: traefik-http-provider-1.0.0-cache-amd64
+      CACHE_TAG_OLD: traefik-http-provider-1.0.0-cache-amd64
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
     steps:
       - checkout:
@@ -67,8 +67,8 @@ jobs:
     executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: traefik-http-provider-1.0.0-arm64
-      CACHE_TAG_OLD: traefik-http-provider-1.0.0-arm64
+      CACHE_TAG: traefik-http-provider-1.0.0-cache-arm64
+      CACHE_TAG_OLD: traefik-http-provider-1.0.0-cache-arm64
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
     steps:
       - checkout:
@@ -90,8 +90,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_AMD64: traefik-http-provider-1.0.0-amd64
-      CACHE_ARM64: traefik-http-provider-1.0.0-arm64
+      CACHE_AMD64: traefik-http-provider-1.0.0-cache-amd64
+      CACHE_ARM64: traefik-http-provider-1.0.0-cache-arm64
       IMAGE_REPO: igorferreir4/traefik-http-provider
       IMAGE_TAGS: 1.0.0,latest
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
@@ -102,8 +102,13 @@ jobs:
       - run:
           name: Build and push multi-arch image
           command: |
+            EFFECTIVE_TAGS="$IMAGE_TAGS"
+            if [ "$CIRCLE_BRANCH" != "main" ] && [ -n "$CIRCLE_BRANCH" ]; then
+              EFFECTIVE_TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n" | grep -v '^latest$' | paste -sd "," -)
+            fi
+
             TAGS=""
-            for tag in $(echo $IMAGE_TAGS | tr "," " "); do
+            for tag in $(echo "$EFFECTIVE_TAGS" | tr "," " "); do
               TAGS="$TAGS -t $IMAGE_REPO:$tag"
             done
             
@@ -120,7 +125,12 @@ jobs:
           name: Verify pushed images
           command: |
             echo "Verifying images were pushed successfully..."
-            for tag in $(echo $IMAGE_TAGS | tr "," " "); do
+            EFFECTIVE_TAGS="$IMAGE_TAGS"
+            if [ "$CIRCLE_BRANCH" != "main" ] && [ -n "$CIRCLE_BRANCH" ]; then
+              EFFECTIVE_TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n" | grep -v '^latest$' | paste -sd "," -)
+            fi
+
+            for tag in $(echo "$EFFECTIVE_TAGS" | tr "," " "); do
               echo "Checking $IMAGE_REPO:$tag"
               docker manifest inspect $IMAGE_REPO:$tag > /dev/null
               if [ $? -eq 0 ]; then
@@ -135,8 +145,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: traefik-http-provider-1.0.0-amd64-alpine
-      CACHE_TAG_OLD: traefik-http-provider-1.0.0-amd64-alpine
+      CACHE_TAG: traefik-http-provider-1.0.0-cache-amd64-alpine
+      CACHE_TAG_OLD: traefik-http-provider-1.0.0-cache-amd64-alpine
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
     steps:
       - checkout:
@@ -159,8 +169,8 @@ jobs:
     executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: traefik-http-provider-1.0.0-arm64-alpine
-      CACHE_TAG_OLD: traefik-http-provider-1.0.0-arm64-alpine
+      CACHE_TAG: traefik-http-provider-1.0.0-cache-arm64-alpine
+      CACHE_TAG_OLD: traefik-http-provider-1.0.0-cache-arm64-alpine
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
     steps:
       - checkout:
@@ -183,8 +193,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_AMD64: traefik-http-provider-1.0.0-amd64-alpine
-      CACHE_ARM64: traefik-http-provider-1.0.0-arm64-alpine
+      CACHE_AMD64: traefik-http-provider-1.0.0-cache-amd64-alpine
+      CACHE_ARM64: traefik-http-provider-1.0.0-cache-arm64-alpine
       IMAGE_REPO: igorferreir4/traefik-http-provider
       IMAGE_TAGS: 1.0.0-alpine,latest-alpine
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
@@ -195,8 +205,13 @@ jobs:
       - run:
           name: Build and push multi-arch image
           command: |
+            EFFECTIVE_TAGS="$IMAGE_TAGS"
+            if [ "$CIRCLE_BRANCH" != "main" ] && [ -n "$CIRCLE_BRANCH" ]; then
+              EFFECTIVE_TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n" | grep -v '^latest-alpine$' | paste -sd "," -)
+            fi
+
             TAGS=""
-            for tag in $(echo $IMAGE_TAGS | tr "," " "); do
+            for tag in $(echo "$EFFECTIVE_TAGS" | tr "," " "); do
               TAGS="$TAGS -t $IMAGE_REPO:$tag"
             done
             
@@ -214,7 +229,12 @@ jobs:
           name: Verify pushed images
           command: |
             echo "Verifying images were pushed successfully..."
-            for tag in $(echo $IMAGE_TAGS | tr "," " "); do
+            EFFECTIVE_TAGS="$IMAGE_TAGS"
+            if [ "$CIRCLE_BRANCH" != "main" ] && [ -n "$CIRCLE_BRANCH" ]; then
+              EFFECTIVE_TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n" | grep -v '^latest-alpine$' | paste -sd "," -)
+            fi
+
+            for tag in $(echo "$EFFECTIVE_TAGS" | tr "," " "); do
               echo "Checking $IMAGE_REPO:$tag"
               docker manifest inspect $IMAGE_REPO:$tag > /dev/null
               if [ $? -eq 0 ]; then
