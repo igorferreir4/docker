@@ -44,8 +44,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: traefik-http-provider-1.0.0-cache-amd64
-      CACHE_TAG_OLD: traefik-http-provider-1.0.0-cache-amd64
+      CACHE_TAG: traefik-http-provider-1.0.0-amd64
+      CACHE_TAG_OLD: traefik-http-provider-1.0.0-amd64
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
     steps:
       - checkout:
@@ -67,8 +67,8 @@ jobs:
     executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: traefik-http-provider-1.0.0-cache-arm64
-      CACHE_TAG_OLD: traefik-http-provider-1.0.0-cache-arm64
+      CACHE_TAG: traefik-http-provider-1.0.0-arm64
+      CACHE_TAG_OLD: traefik-http-provider-1.0.0-arm64
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
     steps:
       - checkout:
@@ -90,8 +90,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_AMD64: traefik-http-provider-1.0.0-cache-amd64
-      CACHE_ARM64: traefik-http-provider-1.0.0-cache-arm64
+      CACHE_AMD64: traefik-http-provider-1.0.0-amd64
+      CACHE_ARM64: traefik-http-provider-1.0.0-arm64
       IMAGE_REPO: igorferreir4/traefik-http-provider
       IMAGE_TAGS: 1.0.0,latest
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
@@ -145,8 +145,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: traefik-http-provider-1.0.0-cache-amd64-alpine
-      CACHE_TAG_OLD: traefik-http-provider-1.0.0-cache-amd64-alpine
+      CACHE_TAG: traefik-http-provider-1.0.0-amd64-alpine
+      CACHE_TAG_OLD: traefik-http-provider-1.0.0-amd64-alpine
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
     steps:
       - checkout:
@@ -169,8 +169,8 @@ jobs:
     executor: machine-executor-arm64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_TAG: traefik-http-provider-1.0.0-cache-arm64-alpine
-      CACHE_TAG_OLD: traefik-http-provider-1.0.0-cache-arm64-alpine
+      CACHE_TAG: traefik-http-provider-1.0.0-arm64-alpine
+      CACHE_TAG_OLD: traefik-http-provider-1.0.0-arm64-alpine
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
     steps:
       - checkout:
@@ -193,8 +193,8 @@ jobs:
     executor: machine-executor-amd64
     environment:
       CACHE_REPO: igorferreir4/buildcaches
-      CACHE_AMD64: traefik-http-provider-1.0.0-cache-amd64-alpine
-      CACHE_ARM64: traefik-http-provider-1.0.0-cache-arm64-alpine
+      CACHE_AMD64: traefik-http-provider-1.0.0-amd64-alpine
+      CACHE_ARM64: traefik-http-provider-1.0.0-arm64-alpine
       IMAGE_REPO: igorferreir4/traefik-http-provider
       IMAGE_TAGS: 1.0.0-alpine,latest-alpine
     working_directory: ~/project/containers/traefik-http-provider/1.0.0
