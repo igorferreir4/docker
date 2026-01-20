@@ -20,6 +20,13 @@ parameters:
     default: false
 
 commands:
+  dockerhub-login:
+    steps:
+      - run:
+          name: Login to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
   setup-qemu:
     steps:
       - run:
@@ -30,10 +37,7 @@ commands:
           name: Create builder
           command: |
             docker buildx create --name multi-arch-build --bootstrap --use
-      - run:
-          name: Login to Docker Hub
-          command: |
-            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - dockerhub-login
 
 jobs:
   build-cache-amd64:
@@ -46,14 +50,11 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - run:
-          name: Login to Docker Hub
-          command: |
-            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - dockerhub-login
       - run:
           name: Build docker image (amd64 cache)
           command: |
-            docker buildx create --use --name amd64-builder --driver docker-container || docker buildx use amd64-builder
+            docker buildx inspect amd64-builder > /dev/null 2>&1 || docker buildx create --use --name amd64-builder --driver docker-container
             docker buildx build \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
               --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
@@ -72,14 +73,11 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - run:
-          name: Login to Docker Hub
-          command: |
-            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - dockerhub-login
       - run:
           name: Build docker image (arm64 cache)
           command: |
-            docker buildx create --use --name arm64-builder --driver docker-container || docker buildx use arm64-builder
+            docker buildx inspect arm64-builder > /dev/null 2>&1 || docker buildx create --use --name arm64-builder --driver docker-container
             docker buildx build \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
               --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
@@ -143,14 +141,11 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - run:
-          name: Login to Docker Hub
-          command: |
-            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - dockerhub-login
       - run:
           name: Build docker image (amd64 alpine cache)
           command: |
-            docker buildx create --use --name amd64-alpine-builder --driver docker-container || docker buildx use amd64-alpine-builder
+            docker buildx inspect amd64-alpine-builder > /dev/null 2>&1 || docker buildx create --use --name amd64-alpine-builder --driver docker-container
             docker buildx build \
               -f Dockerfile.alpine \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
@@ -170,14 +165,11 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - run:
-          name: Login to Docker Hub
-          command: |
-            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - dockerhub-login
       - run:
           name: Build docker image (arm64 alpine cache)
           command: |
-            docker buildx create --use --name arm64-alpine-builder --driver docker-container || docker buildx use arm64-alpine-builder
+            docker buildx inspect arm64-alpine-builder > /dev/null 2>&1 || docker buildx create --use --name arm64-alpine-builder --driver docker-container
             docker buildx build \
               -f Dockerfile.alpine \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
