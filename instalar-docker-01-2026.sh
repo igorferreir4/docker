@@ -50,7 +50,9 @@ sleep 1
 # Timezone
 # ===============================
 run_step "🌐  - Configurando timezone America/Sao_Paulo" \
-  bash -c 'sudo timedatectl set-timezone America/Sao_Paulo && echo "🕒  - Data atual: $(date +%d/%m/%Y\ -\ %H:%M:%S)"'
+  bash -c 'sudo timedatectl set-timezone America/Sao_Paulo'
+  echo "🕒  - Data atual: $(date +%d/%m/%Y\ -\ %H:%M:%S)"
+  # bash -c 'sudo timedatectl set-timezone America/Sao_Paulo && echo "🕒  - Data atual: $(date +%d/%m/%Y\ -\ %H:%M:%S)"'
 
 # ===============================
 # Remoção de versões antigas
