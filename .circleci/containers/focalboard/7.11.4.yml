@@ -51,15 +51,21 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - setup-qemu
       - run:
-          name: Build docker image
+          name: Login to Docker Hub
           command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - run:
+          name: Build docker image (amd64 cache)
+          command: |
+            docker buildx create --use --name focalboard-amd64-builder --driver docker-container || docker buildx use focalboard-amd64-builder
             docker buildx build \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
               --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
               --cache-from="$CACHE_REPO:$CACHE_TAG" \
-              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
+              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max \
+              --platform=linux/amd64 \
+              .
 
   focalboard-v7_11_4-cache-arm64:
     executor: machine-executor-arm64
@@ -71,15 +77,21 @@ jobs:
     steps:
       - checkout:
           path: ~/project
-      - setup-qemu
       - run:
-          name: Build docker image
+          name: Login to Docker Hub
           command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - run:
+          name: Build docker image (arm64 cache)
+          command: |
+            docker buildx create --use --name focalboard-arm64-builder --driver docker-container || docker buildx use focalboard-arm64-builder
             docker buildx build \
               --build-arg BUILDKIT_INLINE_CACHE=0 \
               --cache-from="$CACHE_REPO:$CACHE_TAG_OLD" \
               --cache-from="$CACHE_REPO:$CACHE_TAG" \
-              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max .
+              --cache-to=type=registry,ref=$CACHE_REPO:$CACHE_TAG,mode=max \
+              --platform=linux/arm64/v8 \
+              .
 
   focalboard-v7_11_4-build-multi-arch:
     executor: machine-executor-amd64

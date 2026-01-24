@@ -2,12 +2,11 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
-COPY main.go .
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN go mod init traefik-http-provider && \
-    go get gopkg.in/yaml.v3 && \
-    go mod tidy && \
-    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o server .
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server .
 
 FROM gcr.io/distroless/static-debian13:nonroot
 

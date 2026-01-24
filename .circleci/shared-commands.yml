@@ -1,0 +1,390 @@
+version: 2.1
+
+description: |
+  Comandos e templates reutilizáveis para builds de containers Docker multi-arch.
+  Reduz duplicação de código YAML em ~70% nos workflows individuais.
+
+# ==========================================
+# EXECUTORS
+# ==========================================
+
+executors:
+  docker-small:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+
+  machine-amd64-medium:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: medium
+
+  machine-amd64-large:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large
+
+  machine-arm64-medium:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.medium
+
+  machine-arm64-large:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.large
+
+# ==========================================
+# COMMANDS
+# ==========================================
+
+commands:
+  # Login simples no Docker Hub (sem QEMU)
+  docker-login:
+    description: "Autentica no Docker Hub"
+    steps:
+      - run:
+          name: Login to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+
+  # Setup completo com QEMU (para multi-arch build final)
+  setup-buildx-with-qemu:
+    description: "Setup completo: QEMU + Buildx + Login"
+    steps:
+      - run:
+          name: Setup QEMU
+          command: |
+            docker run --privileged --rm tonistiigi/binfmt --install all
+      - run:
+          name: Create Buildx Builder
+          command: |
+            docker buildx create --name multi-arch-build --bootstrap --use
+      - docker-login
+
+  # Build de cache otimizado (nativo, sem --load)
+  build-cache:
+    description: "Build de cache nativo otimizado"
+    parameters:
+      platform:
+        type: string
+        description: "Plataforma alvo (linux/amd64 ou linux/arm64/v8)"
+      cache_repo:
+        type: string
+        default: "igorferreir4/buildcaches"
+      cache_tag:
+        type: string
+        description: "Tag do cache (ex: app-1.0.0-amd64)"
+      cache_tag_old:
+        type: string
+        description: "Tag do cache anterior (para fallback)"
+      builder_name:
+        type: string
+        description: "Nome único do builder"
+      dockerfile:
+        type: string
+        default: "Dockerfile"
+        description: "Nome do Dockerfile (default: Dockerfile)"
+    steps:
+      - docker-login
+      - run:
+          name: Build cache (<< parameters.platform >>)
+          command: |
+            docker buildx create --use --name << parameters.builder_name >> --driver docker-container || docker buildx use << parameters.builder_name >>
+            docker buildx build \
+              -f << parameters.dockerfile >> \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="<< parameters.cache_repo >>:<< parameters.cache_tag_old >>" \
+              --cache-from="<< parameters.cache_repo >>:<< parameters.cache_tag >>" \
+              --cache-to=type=registry,ref=<< parameters.cache_repo >>:<< parameters.cache_tag >>,mode=max \
+              --platform=<< parameters.platform >> \
+              .
+
+  # Build e push multi-arch
+  build-and-push-multi-arch:
+    description: "Build e push de imagem multi-arquitetura"
+    parameters:
+      cache_repo:
+        type: string
+        default: "igorferreir4/buildcaches"
+      cache_amd64:
+        type: string
+        description: "Tag do cache AMD64"
+      cache_arm64:
+        type: string
+        description: "Tag do cache ARM64"
+      image_repo:
+        type: string
+        description: "Repositório da imagem (ex: igorferreir4/app)"
+      image_tags:
+        type: string
+        description: "Tags separadas por vírgula (ex: 1.0.0,latest)"
+      dockerfile:
+        type: string
+        default: "Dockerfile"
+        description: "Nome do Dockerfile"
+    steps:
+      - setup-buildx-with-qemu
+      - run:
+          name: Build and push multi-arch
+          command: |
+            TAGS=""
+            for tag in $(echo << parameters.image_tags >> | tr "," " "); do
+              TAGS="$TAGS -t << parameters.image_repo >>:$tag"
+            done
+            
+            echo "Building with tags: $TAGS"
+            
+            docker buildx build \
+              -f << parameters.dockerfile >> \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="<< parameters.cache_repo >>:<< parameters.cache_amd64 >>" \
+              --cache-from="<< parameters.cache_repo >>:<< parameters.cache_arm64 >>" \
+              --push \
+              --platform=linux/amd64,linux/arm64/v8 \
+              $TAGS .
+
+  # Verificação de imagens publicadas
+  verify-images:
+    description: "Verifica se as imagens foram publicadas com sucesso"
+    parameters:
+      image_repo:
+        type: string
+      image_tags:
+        type: string
+    steps:
+      - run:
+          name: Verify pushed images
+          command: |
+            echo "Verifying images..."
+            for tag in $(echo << parameters.image_tags >> | tr "," " "); do
+              echo "Checking << parameters.image_repo >>:$tag"
+              docker manifest inspect << parameters.image_repo >>:$tag > /dev/null
+              if [ $? -eq 0 ]; then
+                echo "✓ << parameters.image_repo >>:$tag exists"
+              else
+                echo "✗ << parameters.image_repo >>:$tag not found"
+                exit 1
+              fi
+            done
+
+  # Instalação otimizada do Trivy
+  install-trivy:
+    description: "Instala Trivy via binário (otimizado)"
+    parameters:
+      version:
+        type: string
+        default: "0.48.3"
+    steps:
+      - run:
+          name: Install Trivy (optimized)
+          command: |
+            echo "Installing Trivy << parameters.version >>..."
+            wget -qO trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v<< parameters.version >>/trivy_<< parameters.version >>_Linux-64bit.tar.gz
+            tar zxf trivy.tar.gz
+            sudo mv trivy /usr/local/bin/
+            trivy --version
+
+  # Security scan com Trivy
+  trivy-scan:
+    description: "Scan de vulnerabilidades com Trivy"
+    parameters:
+      image:
+        type: string
+        description: "Imagem para scan (ex: igorferreir4/app:latest)"
+      severity:
+        type: string
+        default: "HIGH,CRITICAL"
+      exit_code:
+        type: integer
+        default: 0
+        description: "Exit code em caso de vulnerabilidades (0 = não falha)"
+    steps:
+      - run:
+          name: Security scan
+          command: |
+            echo "Scanning << parameters.image >>..."
+            trivy image --severity << parameters.severity >> --exit-code << parameters.exit_code >> << parameters.image >>
+
+  # Atualizar README no Docker Hub
+  update-dockerhub-readme:
+    description: "Atualiza README no Docker Hub"
+    parameters:
+      image_repo:
+        type: string
+        description: "Repositório (ex: igorferreir4/app)"
+      readme_path:
+        type: string
+        default: "../README.md"
+        description: "Caminho relativo para o README"
+    steps:
+      - run:
+          name: Update Docker Hub README
+          command: |
+            echo "Preparing README content..."
+            README_CONTENT=$(jq -Rs '.' << parameters.readme_path >>)
+            
+            if [ $? -ne 0 ]; then
+              echo "✗ Error processing README with jq"
+              exit 1
+            fi
+            
+            echo "Authenticating with Docker Hub..."
+            PAYLOAD="username=$DOCKERHUB_USERNAME&password=$DOCKERHUB_PASSWORD"
+            JWT=$(curl -s -d "$PAYLOAD" https://hub.docker.com/v2/users/login/ | jq -r .token)
+            
+            if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
+              echo "✗ Failed to authenticate with Docker Hub"
+              exit 1
+            fi
+            
+            echo "Updating README for << parameters.image_repo >>..."
+            HEADER="Authorization: JWT $JWT"
+            URL="https://hub.docker.com/v2/repositories/<< parameters.image_repo >>/"
+            
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+              -X PATCH \
+              -H "$HEADER" \
+              -H 'Content-type: application/json' \
+              --data "{\"full_description\": $README_CONTENT}" \
+              $URL)
+            
+            if [ $STATUS -eq 200 ]; then
+              echo "✓ README updated successfully!"
+            else
+              echo "✗ Failed to update README (HTTP $STATUS)"
+              exit 1
+            fi
+
+  # Deploy notification via SSH
+  deploy-notification:
+    description: "Envia notificação de deploy via SSH"
+    parameters:
+      message:
+        type: string
+        description: "Mensagem do deploy"
+      ssh_fingerprint:
+        type: string
+        default: "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - << parameters.ssh_fingerprint >>
+      - run:
+          name: Send deploy notification
+          command: |
+            ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
+            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo 'Executado em '$(date -d '-3 hours' +'%d/%m/%G - %Hh:%Mm:%Ss')' - << parameters.message >>' >> circleci-builds.txt"
+
+# ==========================================
+# JOB TEMPLATES (para uso com matrix)
+# ==========================================
+
+jobs:
+  # Template genérico de cache build
+  cache-build:
+    parameters:
+      platform:
+        type: string
+      executor_type:
+        type: executor
+      cache_repo:
+        type: string
+        default: "igorferreir4/buildcaches"
+      cache_tag:
+        type: string
+      cache_tag_old:
+        type: string
+      builder_name:
+        type: string
+      working_dir:
+        type: string
+      dockerfile:
+        type: string
+        default: "Dockerfile"
+    executor: << parameters.executor_type >>
+    environment:
+      CACHE_REPO: << parameters.cache_repo >>
+      CACHE_TAG: << parameters.cache_tag >>
+      CACHE_TAG_OLD: << parameters.cache_tag_old >>
+    working_directory: << parameters.working_dir >>
+    steps:
+      - checkout:
+          path: ~/project
+      - build-cache:
+          platform: << parameters.platform >>
+          cache_repo: << parameters.cache_repo >>
+          cache_tag: << parameters.cache_tag >>
+          cache_tag_old: << parameters.cache_tag_old >>
+          builder_name: << parameters.builder_name >>
+          dockerfile: << parameters.dockerfile >>
+
+  # Template genérico de multi-arch build
+  multi-arch-build:
+    parameters:
+      cache_repo:
+        type: string
+        default: "igorferreir4/buildcaches"
+      cache_amd64:
+        type: string
+      cache_arm64:
+        type: string
+      image_repo:
+        type: string
+      image_tags:
+        type: string
+      working_dir:
+        type: string
+      dockerfile:
+        type: string
+        default: "Dockerfile"
+      skip_readme:
+        type: boolean
+        default: false
+    executor: machine-amd64-medium
+    environment:
+      CACHE_REPO: << parameters.cache_repo >>
+      CACHE_AMD64: << parameters.cache_amd64 >>
+      CACHE_ARM64: << parameters.cache_arm64 >>
+      IMAGE_REPO: << parameters.image_repo >>
+      IMAGE_TAGS: << parameters.image_tags >>
+    working_directory: << parameters.working_dir >>
+    steps:
+      - checkout:
+          path: ~/project
+      - build-and-push-multi-arch:
+          cache_repo: << parameters.cache_repo >>
+          cache_amd64: << parameters.cache_amd64 >>
+          cache_arm64: << parameters.cache_arm64 >>
+          image_repo: << parameters.image_repo >>
+          image_tags: << parameters.image_tags >>
+          dockerfile: << parameters.dockerfile >>
+      - verify-images:
+          image_repo: << parameters.image_repo >>
+          image_tags: << parameters.image_tags >>
+      - when:
+          condition:
+            not: << parameters.skip_readme >>
+          steps:
+            - update-dockerhub-readme:
+                image_repo: << parameters.image_repo >>
+
+  # Template de post-build tasks
+  post-build-security:
+    parameters:
+      image_repo:
+        type: string
+      images_to_scan:
+        type: string
+        description: "Imagens separadas por espaço (ex: latest latest-alpine)"
+    executor: machine-amd64-medium
+    steps:
+      - install-trivy
+      - run:
+          name: Scan multiple images
+          command: |
+            for tag in << parameters.images_to_scan >>; do
+              echo "Scanning << parameters.image_repo >>:$tag"
+              trivy image --severity HIGH,CRITICAL --exit-code 0 << parameters.image_repo >>:$tag
+              echo ""
+            done

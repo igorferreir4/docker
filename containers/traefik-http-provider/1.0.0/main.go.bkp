@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/goccy/go-yaml"
+	"gopkg.in/yaml.v3"
 )
 
 // Server gerencia o servidor HTTP e suas dependências

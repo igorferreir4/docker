@@ -41,6 +41,8 @@ run_step() {
     spinner $! "$msg"
 }
 
+export DEBIAN_FRONTEND=noninteractive
+
 echo "📦  - Iniciando instalação do Docker..."
 sleep 1
 
@@ -54,40 +56,64 @@ run_step "🌐  - Configurando timezone America/Sao_Paulo" \
 # Remoção de versões antigas
 # ===============================
 run_step "🧹  - Removendo pacotes antigos do Docker" \
-  bash -c 'sudo apt-get remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc 2>/dev/null | cut -f1) || true'
+  bash -c 'sudo apt-get remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1) || true'
 
 # ===============================
 # Atualização do sistema
 # ===============================
 run_step "🔄  - Atualizando índices dos pacotes" \
-  sudo apt-get update -y
+  bash -c 'sudo apt-get update -y'
 
 run_step "⬆  - Atualizando pacotes instalados" \
-  sudo apt-get upgrade -y
+  bash -c 'sudo apt-get upgrade -y'
 
 # ===============================
 # Dependências básicas
 # ===============================
 run_step "📦  - Instalando dependências" \
-  sudo apt-get install -y ca-certificates curl htop wget nano zip unzip iputils-ping
+  bash -c 'sudo apt-get install -y ca-certificates curl htop wget nano zip unzip iputils-ping fuse3'
+
+# ===============================
+# Configuração do SSHD
+# ===============================
+run_step "📂  - Criando arquivo de configuração do SSHD" \
+  bash -c 'sudo tee /etc/ssh/sshd_config.d/99-minhaconfig.conf >/dev/null <<EOF
+Match all
+PermitRootLogin prohibit-password
+AllowTcpForwarding yes
+TCPKeepAlive yes
+Compression delayed
+ClientAliveInterval 30
+ClientAliveCountMax 3
+UseDNS no
+EOF'
+
+run_step "🔄  - Recarregando serviço SSH" \
+  bash -c 'sudo sshd -t && sudo systemctl reload ssh'
+
+# ===============================
+# Configuração do FUSE para mount rclone
+# ===============================
+run_step "🔄  - Configurando arquivo do FUSE para Rclone" \
+  bash -c 'sudo sed -i "s/#user_allow_other/user_allow_other/g" /etc/fuse.conf'
 
 # ===============================
 # Chave GPG do Docker
 # ===============================
 run_step "📁  - Criando diretório de keyrings" \
-  sudo install -m 0755 -d /etc/apt/keyrings
+  bash -c 'sudo install -m 0755 -d /etc/apt/keyrings'
 
 run_step "🔑  - Baixando chave GPG do Docker" \
-  sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  bash -c 'sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc'
 
 run_step "🔐  - Ajustando permissões da chave" \
-  sudo chmod a+r /etc/apt/keyrings/docker.asc
+  bash -c 'sudo chmod a+r /etc/apt/keyrings/docker.asc'
 
 # ===============================
 # Repositório Docker (novo padrão .sources)
 # ===============================
 run_step "📂  - Adicionando repositório oficial do Docker" \
-  bash -c 'sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null <<EOF
+  bash -c 'sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
 Types: deb
 URIs: https://download.docker.com/linux/ubuntu
 Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
@@ -99,16 +125,15 @@ EOF'
 # Instalação do Docker
 # ===============================
 run_step "🔄  - Atualizando lista de pacotes (Docker)" \
-  sudo apt update -y
+  bash -c 'sudo apt-get update -y'
 
 run_step "🐳  - Instalando Docker e componentes" \
-  sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  bash -c 'sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin'
 
-# ===============================
 # Serviço Docker
 # ===============================
 run_step "🚀  - Iniciando serviço Docker" \
-  sudo systemctl start docker
+  bash -c 'sudo systemctl start docker'
 
 run_step "🔁  - Habilitando Docker e containerd no boot" \
   bash -c 'sudo systemctl enable docker.service && sudo systemctl enable containerd.service'
@@ -120,7 +145,7 @@ run_step "👥  - Criando grupo docker (se necessário)" \
   bash -c 'getent group docker >/dev/null || sudo groupadd docker'
 
 run_step "➕  - Adicionando usuário ao grupo docker" \
-  sudo usermod -aG docker "$USER"
+  bash -c 'sudo usermod -aG docker "$USER"'
 
 # ===============================
 # Finalização

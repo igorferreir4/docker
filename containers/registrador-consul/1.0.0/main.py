@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+"""
+Docker to Consul Service Registry
+Registra automaticamente serviços Docker no Consul baseado em labels do Traefik
+"""
+
 import os
 import sys
 import time

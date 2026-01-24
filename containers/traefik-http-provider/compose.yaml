@@ -1,0 +1,33 @@
+#
+name: traefik-http-provider
+#
+networks:
+  default:
+    name: geral
+    external: true
+#
+services:
+#
+  traefik-http-provider:
+    build: ./api3
+    container_name: traefik-http-provider
+    ports:
+      - "8085:8085"
+    environment:
+      - API_KEY=123456
+      - API_USER=traefik
+      - API_PASS=teste
+      - CONFIG_PATH=/config/traefik.yml
+      - PORT=8085
+    volumes:
+      - ./dynamic.yml:/config/traefik.yml:ro
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      traefik.enable: "true"
+      traefik.http.services.traefik-http-provider.loadbalancer.server.port: "8085"
+      traefik.http.routers.traefik-http-provider.entryPoints: "websecure"
+      traefik.http.routers.traefik-http-provider.rule: "Host(`traefik-http-provider.igorsf.com.br`)"
+#

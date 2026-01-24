@@ -1,0 +1,148 @@
+# Container Versions Management
+# Este arquivo centraliza as versões de todos os containers do monorepo
+# Atualizado em: 2026-01-12
+
+containers:
+  # Proxy reverso com plugins customizados
+  caddy:
+    current: 2.7.6
+    track: "2.7"
+    type: third-party
+    status: stable
+    base_image: caddy:2.7.6-alpine
+    tags: [2.7.6, "2.7", latest]
+    deprecated_versions: []
+    plugins:
+      - github.com/caddy-dns/cloudflare
+      - github.com/WeidiDeng/caddy-cloudflare-ip
+      - github.com/mholt/caddy-l4
+      - github.com/RussellLuo/caddy-ext/layer4
+
+  # PHP-FPM com extensões Alpine
+  php-fpm:
+    current: 8.3.7
+    track: "8.3"
+    type: third-party
+    status: stable
+    base_image: php:8.3.7-fpm-alpine3.19
+    tags: [8.3.7, "8.3", latest]
+    deprecated_versions: [8.3.6]
+    deprecation_note: "8.3.6 será removida quando a versão 8.4.0 for lançada"
+
+  # TeamSpeak3 Audio Bot
+  ts3audiobot:
+    stable:
+      version: 0.12.2
+      track: "0.12"
+      type: third-party
+      status: stable
+      base_image: alpine:3.18
+      tags: [0.12.2, "0.12", stable]
+    preview:
+      version: 0.13.0-alpha41
+      track: "0.13"
+      type: third-party
+      status: alpha
+      base_image: alpine:3.19
+      tags: [0.13.0-alpha41, "0.13-alpha", latest]
+      note: "Versão alpha - não usar em produção"
+
+  # Mattermost Focalboard com suporte ARM64
+  focalboard:
+    current: 7.11.4
+    track: "7.11"
+    type: third-party
+    status: stable
+    base_image: debian:buster-slim
+    tags: [7.11.4, "7.11", latest]
+    deprecated_versions: []
+    note: "Build multi-stage com Node 16 e Go 1.18"
+
+  # Registrador automático Docker->Consul
+  registrador-consul:
+    current: 1.0.0
+    track: "1.0"
+    type: internal
+    status: stable
+    base_image: python:3.14-alpine
+    tags: [1.0.0, "1.0", "1", latest]
+    deprecated_versions: []
+    features:
+      - Registro automático de containers Docker no Consul
+      - Leitura de labels do Traefik
+      - Remoção automática de serviços órfãos
+      - Suporte para IP fixo/dinâmico
+      - Resync periódico
+
+  # Traefik HTTP Provider
+  traefik-http-provider:
+    current: 1.0.0
+    track: "1.0"
+    type: internal
+    status: stable
+    variants:
+      distroless:
+        base_image: gcr.io/distroless/static-debian13:nonroot
+        tags: [1.0.0, "1.0", "1", latest]
+      alpine:
+        base_image: golang:1.25-alpine
+        tags: [1.0.0-alpine, "1.0-alpine", latest-alpine]
+    deprecated_versions: []
+    features:
+      - Provider HTTP para Traefik
+      - Suporte multi-arquitetura
+
+# Estratégia de versionamento
+versioning_strategy:
+  # Para apps terceiros (caddy, php, ts3audiobot, focalboard)
+  third_party:
+    pattern: "MAJOR.MINOR.PATCH"
+    tags: ["MAJOR.MINOR.PATCH", "MAJOR.MINOR", "latest"]
+    deprecation_policy: "Manter últimas 2 minor versions"
+  
+  # Para apps internos (registrador-consul, traefik-http-provider)
+  internal:
+    pattern: "MAJOR.MINOR.PATCH"
+    tags: ["MAJOR.MINOR.PATCH", "MAJOR.MINOR", "MAJOR", "latest"]
+    variants: ["distroless", "alpine"]
+  
+  # Para versões alpha/beta
+  preview:
+    pattern: "MAJOR.MINOR.PATCH-PRERELEASE"
+    tags: ["MAJOR.MINOR.PATCH-PRERELEASE", "MAJOR.MINOR-PRERELEASE", "PRERELEASE"]
+    note: "Não incluir 'latest' em versões instáveis"
+
+# Build configuration
+build_config:
+  platforms:
+    - linux/amd64
+    - linux/arm64/v8
+  
+  cache_strategy:
+    type: registry
+    repository: igorferreir4/buildcaches
+    mode: max
+  
+  security:
+    scan_tool: trivy
+    scan_severity: [HIGH, CRITICAL]
+    fail_on_critical: false
+  
+  optimization:
+    buildkit_inline_cache: false
+    parallel_cache_builds: true
+    consolidate_readme_updates: true
+    use_native_builders: true
+
+# Maintenance schedule
+maintenance:
+  check_updates: weekly
+  cleanup_old_versions: monthly
+  security_scans: per_build
+  
+# Deprecation workflow
+deprecation:
+  grace_period: "30 days"
+  notification_channels:
+    - circleci_builds
+  removal_policy: "Remove quando nova minor version estiver stable por 14 dias"

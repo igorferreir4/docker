@@ -129,11 +129,11 @@ jobs:
       - run:
           name: Security scan with Trivy
           command: |
-            echo "Installing Trivy..."
-            wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-            echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-            sudo apt-get update
-            sudo apt-get install -y trivy
+            echo "Installing Trivy (optimized)..."
+            wget -qO trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.68.2/trivy_0.68.2_Linux-64bit.tar.gz
+            tar zxf trivy.tar.gz
+            sudo mv trivy /usr/local/bin/
+            trivy --version
             
             echo "Scanning image for vulnerabilities..."
             trivy image --severity HIGH,CRITICAL --exit-code 0 $IMAGE_REPO:latest

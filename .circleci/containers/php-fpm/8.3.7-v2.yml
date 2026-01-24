@@ -1,0 +1,269 @@
+version: 2.1
+
+# ==========================================
+# IMPORT SHARED COMMANDS
+# ==========================================
+
+orbs:
+  continuation: circleci/continuation@2.0.1
+
+# Infelizmente CircleCI não suporta import direto de arquivos locais em workflows normais
+# Mas podemos usar este padrão para referência e copiar os commands necessários
+
+# ==========================================
+# EXECUTORS (do shared-commands.yml)
+# ==========================================
+
+executors:
+  machine-amd64-large:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large
+
+  machine-arm64-large:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.large
+
+  machine-amd64-medium:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: medium
+
+  docker-small:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+
+# ==========================================
+# PARAMETERS
+# ==========================================
+
+parameters:
+  build-and-push:
+    type: boolean
+    default: false
+  run-all:
+    type: boolean
+    default: false
+
+# ==========================================
+# COMMANDS (copiados do shared-commands.yml)
+# ==========================================
+
+commands:
+  docker-login:
+    steps:
+      - run:
+          name: Login to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login --username $DOCKERHUB_USERNAME --password-stdin
+
+  build-cache:
+    parameters:
+      platform:
+        type: string
+      cache_repo:
+        type: string
+        default: "igorferreir4/buildcaches"
+      cache_tag:
+        type: string
+      cache_tag_old:
+        type: string
+      builder_name:
+        type: string
+    steps:
+      - docker-login
+      - run:
+          name: Build cache (<< parameters.platform >>)
+          command: |
+            docker buildx create --use --name << parameters.builder_name >> --driver docker-container || docker buildx use << parameters.builder_name >>
+            docker buildx build \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="<< parameters.cache_repo >>:<< parameters.cache_tag_old >>" \
+              --cache-from="<< parameters.cache_repo >>:<< parameters.cache_tag >>" \
+              --cache-to=type=registry,ref=<< parameters.cache_repo >>:<< parameters.cache_tag >>,mode=max \
+              --platform=<< parameters.platform >> \
+              .
+
+  setup-buildx-with-qemu:
+    steps:
+      - run:
+          name: Setup QEMU
+          command: |
+            docker run --privileged --rm tonistiigi/binfmt --install all
+      - run:
+          name: Create Buildx Builder
+          command: |
+            docker buildx create --name multi-arch-build --bootstrap --use
+      - docker-login
+
+  build-and-push-multi-arch:
+    parameters:
+      cache_repo:
+        type: string
+      cache_amd64:
+        type: string
+      cache_arm64:
+        type: string
+      image_repo:
+        type: string
+      image_tags:
+        type: string
+    steps:
+      - setup-buildx-with-qemu
+      - run:
+          name: Build and push multi-arch
+          command: |
+            TAGS=""
+            for tag in $(echo << parameters.image_tags >> | tr "," " "); do
+              TAGS="$TAGS -t << parameters.image_repo >>:$tag"
+            done
+            
+            docker buildx build \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="<< parameters.cache_repo >>:<< parameters.cache_amd64 >>" \
+              --cache-from="<< parameters.cache_repo >>:<< parameters.cache_arm64 >>" \
+              --push \
+              --platform=linux/amd64,linux/arm64/v8 \
+              $TAGS .
+
+  verify-images:
+    parameters:
+      image_repo:
+        type: string
+      image_tags:
+        type: string
+    steps:
+      - run:
+          name: Verify pushed images
+          command: |
+            for tag in $(echo << parameters.image_tags >> | tr "," " "); do
+              echo "Checking << parameters.image_repo >>:$tag"
+              docker manifest inspect << parameters.image_repo >>:$tag > /dev/null
+              if [ $? -eq 0 ]; then
+                echo "✓ << parameters.image_repo >>:$tag exists"
+              else
+                echo "✗ << parameters.image_repo >>:$tag not found"
+                exit 1
+              fi
+            done
+
+  update-dockerhub-readme:
+    parameters:
+      image_repo:
+        type: string
+      readme_path:
+        type: string
+        default: "../README.md"
+    steps:
+      - run:
+          name: Update Docker Hub README
+          command: |
+            README_CONTENT=$(jq -Rs '.' << parameters.readme_path >>)
+            PAYLOAD="username=$DOCKERHUB_USERNAME&password=$DOCKERHUB_PASSWORD"
+            JWT=$(curl -s -d "$PAYLOAD" https://hub.docker.com/v2/users/login/ | jq -r .token)
+            
+            if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
+              echo "✗ Failed to authenticate"
+              exit 1
+            fi
+            
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+              -X PATCH \
+              -H "Authorization: JWT $JWT" \
+              -H 'Content-type: application/json' \
+              --data "{\"full_description\": $README_CONTENT}" \
+              https://hub.docker.com/v2/repositories/<< parameters.image_repo >>/)
+            
+            [ $STATUS -eq 200 ] && echo "✓ README updated" || exit 1
+
+  deploy-notification:
+    parameters:
+      message:
+        type: string
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
+      - run:
+          name: Deploy notification
+          command: |
+            ssh-keyscan $SSH_HOST_IGOR_ARM >> ~/.ssh/known_hosts
+            ssh $SSH_USER@$SSH_HOST_IGOR_ARM "echo 'Executado em '$(date -d '-3 hours' +'%d/%m/%G - %Hh:%Mm:%Ss')' - << parameters.message >>' >> circleci-builds.txt"
+
+# ==========================================
+# JOBS (usando commands)
+# ==========================================
+
+jobs:
+  cache-amd64:
+    executor: machine-amd64-large
+    working_directory: ~/project/containers/php-fpm/8.3.7
+    steps:
+      - checkout:
+          path: ~/project
+      - build-cache:
+          platform: "linux/amd64"
+          cache_repo: "igorferreir4/buildcaches"
+          cache_tag: "php-8.3.7-amd64"
+          cache_tag_old: "php-8.3.7-amd64"
+          builder_name: "php-837-amd64"
+
+  cache-arm64:
+    executor: machine-arm64-large
+    working_directory: ~/project/containers/php-fpm/8.3.7
+    steps:
+      - checkout:
+          path: ~/project
+      - build-cache:
+          platform: "linux/arm64/v8"
+          cache_repo: "igorferreir4/buildcaches"
+          cache_tag: "php-8.3.7-arm64"
+          cache_tag_old: "php-8.3.7-arm64"
+          builder_name: "php-837-arm64"
+
+  build-and-push:
+    executor: machine-amd64-medium
+    working_directory: ~/project/containers/php-fpm/8.3.7
+    steps:
+      - checkout:
+          path: ~/project
+      - build-and-push-multi-arch:
+          cache_repo: "igorferreir4/buildcaches"
+          cache_amd64: "php-8.3.7-amd64"
+          cache_arm64: "php-8.3.7-arm64"
+          image_repo: "igorferreir4/php-fpm"
+          image_tags: "8.3.7,8.3,latest"
+      - verify-images:
+          image_repo: "igorferreir4/php-fpm"
+          image_tags: "8.3.7,8.3,latest"
+      - update-dockerhub-readme:
+          image_repo: "igorferreir4/php-fpm"
+
+  deploy:
+    executor: docker-small
+    steps:
+      - deploy-notification:
+          message: "PHP-FPM v8.3.7"
+
+# ==========================================
+# WORKFLOW
+# ==========================================
+
+workflows:
+  php-8_3_7:
+    when:
+      or:
+        - << pipeline.parameters.build-and-push >>
+        - << pipeline.parameters.run-all >>
+    jobs:
+      - cache-amd64
+      - cache-arm64
+      - build-and-push:
+          requires:
+            - cache-amd64
+            - cache-arm64
+      - deploy:
+          requires:
+            - build-and-push
