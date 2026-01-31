@@ -1,31 +1,23 @@
-FROM python:3.14-alpine
+# Stage 1: Build
+FROM golang:1.25-alpine AS builder
 
-LABEL maintainer="Igor Ferreira"
-LABEL description="Registrador Docker > Consul > Traefik."
-LABEL version="1.0.0"
+WORKDIR /build
 
-WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
 
-COPY requirements.txt .
+COPY main.go ./
 
-# Instalar dependências
-RUN pip install --no-cache-dir -r requirements.txt
+RUN CGO_ENABLED=0 go build \
+    -ldflags="-w -s" \
+    -o registrador \
+    main.go
 
-# Copiar código
-COPY main.py .
+# Stage 2: Application
+FROM gcr.io/distroless/static-debian13:nonroot AS final
 
-# Variáveis de ambiente padrão
-ENV IP="" \
-    MODE="container" \
-    CONSUL_URL="http://consul:8500" \
-    RESYNC_INTERVAL="120" \
-    DOCKER_SOCKET="" \
-    DEREGISTER_RETRIES="3" \
-    DEREGISTER_RETRY_DELAY="2"
+COPY --from=builder /build/registrador /registrador
 
-# Healthcheck
-# HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-#     CMD wget --quiet --tries=1 --spider ${CONSUL_URL}/v1/status/leader || exit 1
+USER nonroot:nonroot
 
-# Executar
-ENTRYPOINT ["python", "-u", "main.py"]
+ENTRYPOINT ["/registrador"]
