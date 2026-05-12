@@ -130,7 +130,7 @@ jobs:
           name: Security scan with Trivy
           command: |
             echo "Installing Trivy (optimized)..."
-            wget -qO trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.68.2/trivy_0.68.2_Linux-64bit.tar.gz
+            wget -qO trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz
             tar zxf trivy.tar.gz
             sudo mv trivy /usr/local/bin/
             trivy --version
