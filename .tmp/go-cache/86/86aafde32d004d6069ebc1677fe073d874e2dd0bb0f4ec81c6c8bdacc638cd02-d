@@ -1,0 +1,13 @@
+./build_identity.go
+./delete_response.go
+./disk_usage.go
+./history_response_item.go
+./identity.go
+./image.go
+./image_inspect.go
+./manifest.go
+./pull_identity.go
+./signature_identity.go
+./signature_timestamp.go
+./signer_identity.go
+./summary.go
