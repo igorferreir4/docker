@@ -1,6 +1,0 @@
-./capability.go
-./device.go
-./env.go
-./mount.go
-./plugin.go
-./plugin_responses.go

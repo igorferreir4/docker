@@ -1,6 +1,0 @@
-./cluster_volume.go
-./create_request.go
-./disk_usage.go
-./list_response.go
-./prune_report.go
-./volume.go
