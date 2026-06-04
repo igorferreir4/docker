@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 go build \
     -o registrador \
     main.go
 
-## Stage 2: Application
+## Stage 2: Application 
 FROM gcr.io/distroless/static-debian13:nonroot AS final
 
 COPY --from=builder /build/registrador /registrador
