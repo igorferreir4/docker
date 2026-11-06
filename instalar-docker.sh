@@ -6,7 +6,7 @@ if (set -o pipefail) 2>/dev/null; then
 fi
 
 LOG_FILE="log-install.txt"
-TARGET_USER="${SUDO_USER:-${USER:-}}"
+TARGET_USER="${SUDO_USER:-${DOAS_USER:-${USER:-}}}"
 
 restore_cursor() {
     printf '\033[?25h'
@@ -17,12 +17,19 @@ trap restore_cursor EXIT INT TERM
 run_root() {
     if [ "$(id -u)" -eq 0 ]; then
         "$@"
+    elif [ "${SYSTEM_ID:-}" = "alpine" ] && command -v doas >/dev/null 2>&1; then
+        doas "$@"
     elif command -v sudo >/dev/null 2>&1; then
         sudo "$@"
     else
-        echo "ERRO: execute como root ou instale o sudo." >&2
+        echo "ERRO: execute como root ou configure doas/sudo." >&2
         return 1
     fi
+}
+
+apt_get() {
+    run_root env DEBIAN_FRONTEND=noninteractive \
+        apt-get -o DPkg::Lock::Timeout=300 "$@"
 }
 
 spinner() {
@@ -110,8 +117,8 @@ enable_alpine_community() {
 update_system() {
     case "$SYSTEM_ID" in
         ubuntu)
-            run_root env DEBIAN_FRONTEND=noninteractive apt-get update -y
-            run_root env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+            apt_get update -y
+            apt_get upgrade -y
             ;;
         alpine)
             enable_alpine_community
@@ -124,11 +131,11 @@ update_system() {
 install_dependencies() {
     case "$SYSTEM_ID" in
         ubuntu)
-            run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            apt_get install -y \
                 ca-certificates curl htop wget nano zip unzip iputils-ping \
                 fuse3 login openssh-server tzdata
             if ! command -v newgrp >/dev/null 2>&1; then
-                run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y util-linux-extra
+                apt_get install -y util-linux-extra
             fi
             ;;
         alpine)
@@ -210,7 +217,7 @@ remove_old_ubuntu_docker() {
     if [ -n "$old_packages" ]; then
         # A expansão é intencional: contém somente nomes fixos de pacotes.
         # shellcheck disable=SC2086
-        run_root env DEBIAN_FRONTEND=noninteractive apt-get remove -y $old_packages
+        apt_get remove -y $old_packages
     fi
 }
 
@@ -237,8 +244,8 @@ Architectures: $ubuntu_architecture
 Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 
-    run_root env DEBIAN_FRONTEND=noninteractive apt-get update -y
-    run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    apt_get update -y
+    apt_get install -y \
         docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
