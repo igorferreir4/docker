@@ -2,13 +2,34 @@ version: 2.1
 
 setup: true
 
+parameters:
+  run-all:
+    type: boolean
+    default: false
+
 orbs:
-  path-filtering: circleci/path-filtering@3.0.0
+  continuation: circleci/continuation@1.1.0
+
+jobs:
+  generate-config:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Generate dynamic configuration
+          command: |
+            if [ "<< pipeline.parameters.run-all >>" = "true" ]; then
+              bash .circleci/scripts/generate-config.sh --all /tmp/continue.yml
+            else
+              git fetch origin main --depth=100 || true
+              bash .circleci/scripts/generate-config.sh /tmp/continue.yml
+            fi
+      - continuation/continue:
+          configuration_path: /tmp/continue.yml
 
 workflows:
-  procurando-mudanças:
+  setup:
     jobs:
-      - path-filtering/filter:
-          base-revision: main
-          config-path: .circleci/nada a fazer.yml
-          mapping: .circleci/mapping.conf
+      - generate-config

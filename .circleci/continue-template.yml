@@ -1,0 +1,123 @@
+version: 2.1
+
+jobs:
+  no-changes:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run: echo "Nenhum container alterado."
+
+  cache-build:
+    parameters:
+      app: { type: string }
+      version: { type: string }
+      dockerfile: { type: string }
+      cache-tag: { type: string }
+      platform: { type: string }
+      resource-class: { type: string }
+      machine-image: { type: string }
+    machine:
+      image: << parameters.machine-image >>
+    resource_class: << parameters.resource-class >>
+    working_directory: ~/project/containers/<< parameters.app >>/<< parameters.version >>
+    steps:
+      - checkout:
+          path: ~/project
+      - run:
+          name: Login to Docker Hub
+          command: echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      - run:
+          name: Build registry cache
+          command: |
+            docker buildx create --use --name cache-builder --driver docker-container
+            docker buildx build \
+              -f "<< parameters.dockerfile >>" \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="igorferreir4/buildcaches:<< parameters.cache-tag >>" \
+              --cache-to="type=registry,ref=igorferreir4/buildcaches:<< parameters.cache-tag >>,mode=max" \
+              --platform="<< parameters.platform >>" .
+
+  publish:
+    parameters:
+      app: { type: string }
+      version: { type: string }
+      dockerfile: { type: string }
+      cache-amd64: { type: string }
+      cache-arm64: { type: string }
+      image-tags: { type: string }
+      machine-image: { type: string }
+      scan: { type: boolean, default: false }
+      update-readme: { type: boolean, default: true }
+    machine:
+      image: << parameters.machine-image >>
+    resource_class: medium
+    working_directory: ~/project/containers/<< parameters.app >>/<< parameters.version >>
+    steps:
+      - checkout:
+          path: ~/project
+      - run:
+          name: Setup Buildx and login
+          command: |
+            docker run --privileged --rm tonistiigi/binfmt --install all
+            docker buildx create --name multi-arch-build --bootstrap --use
+            echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      - run:
+          name: Build and push multi-architecture image
+          command: |
+            TAG_ARGS=""
+            for tag in $(echo "<< parameters.image-tags >>" | tr ',' ' '); do
+              TAG_ARGS="$TAG_ARGS -t igorferreir4/<< parameters.app >>:$tag"
+            done
+            docker buildx build \
+              -f "<< parameters.dockerfile >>" \
+              --build-arg BUILDKIT_INLINE_CACHE=0 \
+              --cache-from="igorferreir4/buildcaches:<< parameters.cache-amd64 >>" \
+              --cache-from="igorferreir4/buildcaches:<< parameters.cache-arm64 >>" \
+              --push --platform=linux/amd64,linux/arm64/v8 $TAG_ARGS .
+      - run:
+          name: Verify published tags
+          command: |
+            for tag in $(echo "<< parameters.image-tags >>" | tr ',' ' '); do
+              docker manifest inspect "igorferreir4/<< parameters.app >>:$tag" >/dev/null
+            done
+      - when:
+          condition: << parameters.scan >>
+          steps:
+            - run:
+                name: Security scan with Trivy
+                command: |
+                  wget -qO trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz
+                  tar zxf trivy.tar.gz
+                  sudo mv trivy /usr/local/bin/
+                  FIRST_TAG=$(echo "<< parameters.image-tags >>" | cut -d, -f1)
+                  trivy image --severity HIGH,CRITICAL --exit-code 0 "igorferreir4/<< parameters.app >>:$FIRST_TAG"
+      - when:
+          condition: << parameters.update-readme >>
+          steps:
+            - run:
+                name: Update Docker Hub README
+                command: |
+                  README_CONTENT=$(jq -Rs '.' ../README.md)
+                  JWT=$(curl -fsS -d "username=$DOCKERHUB_USERNAME&password=$DOCKERHUB_PASSWORD" https://hub.docker.com/v2/users/login/ | jq -r .token)
+                  STATUS=$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH \
+                    -H "Authorization: JWT $JWT" -H 'Content-type: application/json' \
+                    --data "{\"full_description\": $README_CONTENT}" \
+                    "https://hub.docker.com/v2/repositories/igorferreir4/<< parameters.app >>/")
+                  [ "$STATUS" -eq 200 ]
+
+  notify:
+    parameters:
+      message: { type: string }
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:hLlCCj1OZj3pbBbgrGvfHjdTf20F4IYKyKvyJTMXC/A"
+      - run:
+          name: Register successful build
+          command: |
+            ssh-keyscan "$SSH_HOST_IGOR_ARM" >> ~/.ssh/known_hosts
+            ssh "$SSH_USER@$SSH_HOST_IGOR_ARM" "echo 'Executado em '$(date -d '-3 hours' +'%d/%m/%G - %Hh:%Mm:%Ss')' - << parameters.message >>' >> circleci-builds.txt"
