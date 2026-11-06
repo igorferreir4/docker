@@ -1,86 +1,157 @@
-#!/bin/bash
+#!/bin/sh
+
+set -eu
+if (set -o pipefail) 2>/dev/null; then
+    set -o pipefail
+fi
 
 LOG_FILE="log-install.txt"
+TARGET_USER="${SUDO_USER:-${USER:-}}"
 
-# ===============================
-# Função spinner com mensagem
-# ===============================
+restore_cursor() {
+    printf '\033[?25h'
+}
+
+trap restore_cursor EXIT INT TERM
+
+run_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        echo "ERRO: execute como root ou instale o sudo." >&2
+        return 1
+    fi
+}
+
 spinner() {
-    local pid=$1
-    local msg="$2"
-    local delay=0.1
-    local spinstr='| / - \'
-    local start_time=$(date +%s%3N)
+    spinner_pid=$1
+    spinner_msg=$2
+    spinner_chars='| / - \'
 
-    tput civis
-    while kill -0 "$pid" 2>/dev/null; do
-        for c in $spinstr; do
-            printf "\r%s [%c] " "$msg" "$c"
-            sleep $delay
+    printf '\033[?25l'
+    while kill -0 "$spinner_pid" 2>/dev/null; do
+        for spinner_char in $spinner_chars; do
+            kill -0 "$spinner_pid" 2>/dev/null || break
+            printf '\r%s [%s] ' "$spinner_msg" "$spinner_char"
+            sleep 0.1
         done
     done
+}
 
-    local end_time=$(date +%s%3N)
-    local duration=$((end_time - start_time))
-    if [ "$duration" -lt 800 ]; then
-        sleep 0.3
+run_step() {
+    step_msg=$1
+    shift
+
+    "$@" >>"$LOG_FILE" 2>&1 &
+    step_pid=$!
+    spinner "$step_pid" "$step_msg" &
+    step_spinner_pid=$!
+
+    if wait "$step_pid"; then
+        step_status=0
+    else
+        step_status=$?
     fi
 
-    tput cnorm
-    printf "\r%s [✔ OK]\n" "$msg"
+    wait "$step_spinner_pid" 2>/dev/null || true
+    restore_cursor
+
+    if [ "$step_status" -eq 0 ]; then
+        printf '\r%s [OK]\033[K\n' "$step_msg"
+        return 0
+    fi
+
+    printf '\r%s [FALHOU]\033[K\n' "$step_msg" >&2
+    echo "Consulte o log: $(pwd)/$LOG_FILE" >&2
+    return "$step_status"
 }
 
-# ===============================
-# Executa passo com spinner + log
-# ===============================
-run_step() {
-    local msg="$1"
-    shift
-    printf "%s... " "$msg"
-    ("$@" >>"$LOG_FILE" 2>&1) &
-    spinner $! "$msg"
+detect_system() {
+    if [ ! -r /etc/os-release ]; then
+        echo "ERRO: não foi possível identificar o sistema operacional." >&2
+        return 1
+    fi
+
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    SYSTEM_ID=${ID:-}
+
+    case "$SYSTEM_ID" in
+        ubuntu|alpine) ;;
+        *)
+            echo "ERRO: sistema não suportado: ${SYSTEM_ID:-desconhecido}." >&2
+            return 1
+            ;;
+    esac
 }
 
-export DEBIAN_FRONTEND=noninteractive
+enable_alpine_community() {
+    if grep -Eq '^[[:space:]]*[^#].*/community[[:space:]]*$' /etc/apk/repositories; then
+        return 0
+    fi
 
-echo "📦  - Iniciando instalação do Docker..."
-sleep 1
+    if grep -Eq '^[[:space:]]*#[[:space:]]*[^#].*/community[[:space:]]*$' /etc/apk/repositories; then
+        run_root sed -i '/\/community[[:space:]]*$/s/^[[:space:]]*#[[:space:]]*//' /etc/apk/repositories
+        return 0
+    fi
 
-# ===============================
-# Timezone
-# ===============================
-run_step "🌐  - Configurando timezone America/Sao_Paulo" \
-  bash -c 'sudo timedatectl set-timezone America/Sao_Paulo'
-  echo "🕒  - Data atual: $(date +%d/%m/%Y\ -\ %H:%M:%S)"
-  # bash -c 'sudo timedatectl set-timezone America/Sao_Paulo && echo "🕒  - Data atual: $(date +%d/%m/%Y\ -\ %H:%M:%S)"'
+    alpine_main_repo=$(grep -E '^[[:space:]]*[^#].*/main[[:space:]]*$' /etc/apk/repositories | head -n 1 || true)
+    if [ -z "$alpine_main_repo" ]; then
+        echo "ERRO: repositório main do Alpine não encontrado." >&2
+        return 1
+    fi
 
-# ===============================
-# Remoção de versões antigas
-# ===============================
-run_step "🧹  - Removendo pacotes antigos do Docker" \
-  bash -c 'sudo apt-get remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1) || true'
+    alpine_community_repo=$(printf '%s\n' "$alpine_main_repo" | sed 's|/main[[:space:]]*$|/community|')
+    printf '%s\n' "$alpine_community_repo" | run_root tee -a /etc/apk/repositories >/dev/null
+}
 
-# ===============================
-# Atualização do sistema
-# ===============================
-run_step "🔄  - Atualizando índices dos pacotes" \
-  bash -c 'sudo apt-get update -y'
+update_system() {
+    case "$SYSTEM_ID" in
+        ubuntu)
+            run_root env DEBIAN_FRONTEND=noninteractive apt-get update -y
+            run_root env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+            ;;
+        alpine)
+            enable_alpine_community
+            run_root apk update
+            run_root apk upgrade
+            ;;
+    esac
+}
 
-run_step "⬆  - Atualizando pacotes instalados" \
-  bash -c 'sudo apt-get upgrade -y'
+install_dependencies() {
+    case "$SYSTEM_ID" in
+        ubuntu)
+            run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                ca-certificates curl htop wget nano zip unzip iputils-ping \
+                fuse3 login openssh-server tzdata
+            if ! command -v newgrp >/dev/null 2>&1; then
+                run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y util-linux-extra
+            fi
+            ;;
+        alpine)
+            run_root apk add --no-cache \
+                ca-certificates curl htop wget nano zip unzip iputils \
+                fuse3 openssh shadow-login tzdata
+            ;;
+    esac
+}
 
-# ===============================
-# Dependências básicas
-# ===============================
-run_step "📦  - Instalando dependências" \
-  bash -c 'sudo apt-get install -y ca-certificates curl htop wget nano zip unzip iputils-ping fuse3'
+configure_timezone() {
+    if [ "$SYSTEM_ID" = "ubuntu" ] && command -v timedatectl >/dev/null 2>&1; then
+        run_root timedatectl set-timezone America/Sao_Paulo
+    else
+        run_root ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
+        printf '%s\n' 'America/Sao_Paulo' | run_root tee /etc/timezone >/dev/null
+    fi
+}
 
-# ===============================
-# Configuração do SSHD
-# ===============================
-run_step "📂  - Criando arquivo de configuração do SSHD" \
-  bash -c 'sudo tee /etc/ssh/sshd_config.d/99-minhaconfig.conf >/dev/null <<EOF
-Match all
+configure_sshd() {
+    run_root install -d -m 0755 /etc/ssh/sshd_config.d /run/sshd
+
+    run_root tee /etc/ssh/sshd_config.d/99-minhaconfig.conf >/dev/null <<'EOF'
 PermitRootLogin prohibit-password
 AllowTcpForwarding yes
 TCPKeepAlive yes
@@ -88,71 +159,155 @@ Compression delayed
 ClientAliveInterval 30
 ClientAliveCountMax 3
 UseDNS no
-EOF'
+EOF
 
-run_step "🔄  - Recarregando serviço SSH" \
-  bash -c 'sudo sshd -t && sudo systemctl reload ssh'
+    if ! grep -Eq '^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
+        run_root sed -i '1iInclude /etc/ssh/sshd_config.d/*.conf' /etc/ssh/sshd_config
+    fi
 
-# ===============================
-# Configuração do FUSE para mount rclone
-# ===============================
-run_step "🔄  - Configurando arquivo do FUSE para Rclone" \
-  bash -c 'sudo sed -i "s/#user_allow_other/user_allow_other/g" /etc/fuse.conf'
+    sshd_path=$(command -v sshd)
+    run_root "$sshd_path" -t
 
-# ===============================
-# Chave GPG do Docker
-# ===============================
-run_step "📁  - Criando diretório de keyrings" \
-  bash -c 'sudo install -m 0755 -d /etc/apt/keyrings'
+    case "$SYSTEM_ID" in
+        ubuntu)
+            if run_root systemctl is-active --quiet ssh; then
+                run_root systemctl reload ssh
+            else
+                run_root systemctl enable --now ssh
+            fi
+            ;;
+        alpine)
+            run_root rc-update add sshd default
+            if run_root rc-service sshd status >/dev/null 2>&1; then
+                run_root rc-service sshd reload
+            else
+                run_root rc-service sshd start
+            fi
+            ;;
+    esac
+}
 
-run_step "🔑  - Baixando chave GPG do Docker" \
-  bash -c 'sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc'
+configure_fuse() {
+    if grep -Eq '^[[:space:]]*user_allow_other([[:space:]]|$)' /etc/fuse.conf; then
+        return 0
+    fi
 
-run_step "🔐  - Ajustando permissões da chave" \
-  bash -c 'sudo chmod a+r /etc/apt/keyrings/docker.asc'
+    if grep -Eq '^[[:space:]]*#[[:space:]]*user_allow_other([[:space:]]|$)' /etc/fuse.conf; then
+        run_root sed -i 's/^[[:space:]]*#[[:space:]]*user_allow_other/user_allow_other/' /etc/fuse.conf
+    else
+        printf '%s\n' 'user_allow_other' | run_root tee -a /etc/fuse.conf >/dev/null
+    fi
+}
 
-# ===============================
-# Repositório Docker (novo padrão .sources)
-# ===============================
-run_step "📂  - Adicionando repositório oficial do Docker" \
-  bash -c 'sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+remove_old_ubuntu_docker() {
+    old_packages=""
+    for package in docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc; do
+        if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed'; then
+            old_packages="$old_packages $package"
+        fi
+    done
+
+    if [ -n "$old_packages" ]; then
+        # A expansão é intencional: contém somente nomes fixos de pacotes.
+        # shellcheck disable=SC2086
+        run_root env DEBIAN_FRONTEND=noninteractive apt-get remove -y $old_packages
+    fi
+}
+
+install_docker_ubuntu() {
+    remove_old_ubuntu_docker
+    run_root install -m 0755 -d /etc/apt/keyrings
+    run_root curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+        -o /etc/apt/keyrings/docker.asc
+    run_root chmod a+r /etc/apt/keyrings/docker.asc
+
+    ubuntu_codename=${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}
+    if [ -z "$ubuntu_codename" ]; then
+        echo "ERRO: codinome da versão do Ubuntu não encontrado." >&2
+        return 1
+    fi
+    ubuntu_architecture=$(dpkg --print-architecture)
+
+    run_root tee /etc/apt/sources.list.d/docker.sources >/dev/null <<EOF
 Types: deb
 URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Suites: $ubuntu_codename
 Components: stable
+Architectures: $ubuntu_architecture
 Signed-By: /etc/apt/keyrings/docker.asc
-EOF'
+EOF
 
-# ===============================
-# Instalação do Docker
-# ===============================
-run_step "🔄  - Atualizando lista de pacotes (Docker)" \
-  bash -c 'sudo apt-get update -y'
+    run_root env DEBIAN_FRONTEND=noninteractive apt-get update -y
+    run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+}
 
-run_step "🐳  - Instalando Docker e componentes" \
-  bash -c 'sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin'
+install_docker_alpine() {
+    run_root apk add --no-cache docker docker-cli-compose
+}
 
-# Serviço Docker
-# ===============================
-run_step "🚀  - Iniciando serviço Docker" \
-  bash -c 'sudo systemctl start docker'
+install_docker() {
+    case "$SYSTEM_ID" in
+        ubuntu) install_docker_ubuntu ;;
+        alpine) install_docker_alpine ;;
+    esac
+}
 
-run_step "🔁  - Habilitando Docker e containerd no boot" \
-  bash -c 'sudo systemctl enable docker.service && sudo systemctl enable containerd.service'
+enable_docker() {
+    case "$SYSTEM_ID" in
+        ubuntu)
+            run_root systemctl enable --now docker.service containerd.service
+            ;;
+        alpine)
+            run_root rc-update add docker default
+            run_root rc-service docker start
+            ;;
+    esac
+}
 
-# ===============================
-# Permissões do usuário
-# ===============================
-run_step "👥  - Criando grupo docker (se necessário)" \
-  bash -c 'getent group docker >/dev/null || sudo groupadd docker'
+configure_docker_user() {
+    case "$TARGET_USER" in
+        ""|root)
+            echo "Nenhum usuário comum identificado; grupo docker não alterado."
+            return 0
+            ;;
+    esac
 
-run_step "➕  - Adicionando usuário ao grupo docker" \
-  bash -c 'sudo usermod -aG docker "$USER"'
+    if id -nG "$TARGET_USER" | tr ' ' '\n' | grep -qx docker; then
+        return 0
+    fi
 
-# ===============================
-# Finalização
-# ===============================
+    case "$SYSTEM_ID" in
+        ubuntu) run_root usermod -aG docker "$TARGET_USER" ;;
+        alpine) run_root addgroup "$TARGET_USER" docker ;;
+    esac
+}
+
+verify_docker() {
+    run_root docker info >/dev/null
+    docker compose version
+    docker buildx version
+}
+
+: >"$LOG_FILE"
+detect_system
+
+echo "Iniciando instalação no sistema: $SYSTEM_ID"
+
+run_step "Atualizando o sistema" update_system
+run_step "Instalando dependências" install_dependencies
+run_step "Configurando timezone America/Sao_Paulo" configure_timezone
+echo "Data atual: $(date '+%d/%m/%Y - %H:%M:%S')"
+run_step "Configurando SSHD" configure_sshd
+run_step "Configurando FUSE para Rclone" configure_fuse
+run_step "Instalando Docker e componentes" install_docker
+run_step "Habilitando e iniciando Docker" enable_docker
+run_step "Configurando usuário no grupo docker" configure_docker_user
+run_step "Validando Docker, Compose e Buildx" verify_docker
+
 echo ""
-echo "✅  - Instalação do Docker finalizada com sucesso!"
-echo "📄  - Log salvo em: $(realpath "$LOG_FILE")"
-echo "⚠️  - Execute 'newgrp docker' ou reinicie a sessão para usar Docker sem sudo."
+echo "Instalação do Docker finalizada com sucesso."
+echo "Log salvo em: $(pwd)/$LOG_FILE"
+if [ -n "$TARGET_USER" ] && [ "$TARGET_USER" != "root" ]; then
+    echo "Execute 'newgrp docker' ou reinicie a sessão para usar Docker sem sudo."
+fi
