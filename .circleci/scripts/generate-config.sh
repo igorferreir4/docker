@@ -20,14 +20,18 @@ select_version_dir() {
   if find "$dir" -maxdepth 1 -type f -name 'Dockerfile*' -print -quit 2>/dev/null | grep -q .; then
     SELECTED["$dir"]=1
   fi
+  return 0
 }
 
 select_app() {
   local app_dir=$1 dir
   [ -d "$app_dir" ] || return 0
   for dir in "$app_dir"/*; do
-    [ -d "$dir" ] && select_version_dir "$dir"
+    if [ -d "$dir" ]; then
+      select_version_dir "$dir"
+    fi
   done
+  return 0
 }
 
 select_all() {
