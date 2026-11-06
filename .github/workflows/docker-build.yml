@@ -21,51 +21,43 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
+      images: ${{ steps.matrix.outputs.images }}
+      builds: ${{ steps.matrix.outputs.builds }}
     steps:
       - uses: actions/checkout@v7
       - id: matrix
-        name: Generate build matrix
+        name: Generate build matrices
         shell: bash
         env:
           TARGET: ${{ inputs.target }}
         run: |
-          MATRIX=$(bash .github/scripts/generate-matrix.sh "$TARGET")
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          IMAGES=$(bash .github/scripts/generate-matrix.sh "$TARGET")
+          BUILDS=$(node -e '
+            const images = JSON.parse(process.argv[1]).include;
+            const platforms = [
+              {platform: "linux/amd64", arch: "amd64", runner: "ubuntu-latest"},
+              {platform: "linux/arm64", arch: "arm64", runner: "ubuntu-24.04-arm"}
+            ];
+            process.stdout.write(JSON.stringify({
+              include: images.flatMap(image => platforms.map(platform => ({...image, ...platform})))
+            }));
+          ' "$IMAGES")
+          echo "images=$IMAGES" >> "$GITHUB_OUTPUT"
+          echo "builds=$BUILDS" >> "$GITHUB_OUTPUT"
 
   build:
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      max-parallel: 2
-      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
-    name: ${{ matrix.app }} ${{ matrix.version }} ${{ matrix.variant }}
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.prepare.outputs.builds) }}
+    name: ${{ matrix.app }} ${{ matrix.version }} ${{ matrix.variant }} ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-
-      - name: Prepare image tags
-        id: tags
-        shell: bash
-        env:
-          APP: ${{ matrix.app }}
-          IMAGE_TAGS: ${{ matrix.tags }}
-        run: |
-          TAGS=""
-          for tag in $(echo "$IMAGE_TAGS" | tr ',' ' '); do
-            TAGS="${TAGS}igorferreir4/${APP}:${tag}"$'\n'
-          done
-          {
-            echo 'value<<EOF'
-            printf '%s' "$TAGS"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
 
       - name: Login to Docker Hub
         if: ${{ inputs.publish }}
@@ -74,16 +66,101 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build multi-platform image
+      - name: Build without publishing
+        if: ${{ !inputs.publish }}
         uses: docker/build-push-action@v7
         with:
           context: containers/${{ matrix.app }}/${{ matrix.version }}
           file: containers/${{ matrix.app }}/${{ matrix.version }}/${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: ${{ inputs.publish }}
-          tags: ${{ steps.tags.outputs.value }}
+          platforms: ${{ matrix.platform }}
+          push: false
           cache-from: |
-            type=gha,scope=${{ matrix.app }}-${{ matrix.version }}-${{ matrix.variant }}
-            type=registry,ref=igorferreir4/buildcaches:${{ matrix.app }}-${{ matrix.version }}-amd64${{ matrix.suffix }}
-            type=registry,ref=igorferreir4/buildcaches:${{ matrix.app }}-${{ matrix.version }}-arm64${{ matrix.suffix }}
-          cache-to: type=gha,scope=${{ matrix.app }}-${{ matrix.version }}-${{ matrix.variant }},mode=max
+            type=gha,scope=${{ matrix.app }}-${{ matrix.version }}-${{ matrix.variant }}-${{ matrix.arch }}
+            type=registry,ref=igorferreir4/buildcaches:${{ matrix.app }}-${{ matrix.version }}-${{ matrix.arch }}${{ matrix.suffix }}
+          cache-to: type=gha,scope=${{ matrix.app }}-${{ matrix.version }}-${{ matrix.variant }}-${{ matrix.arch }},mode=max
+
+      - name: Build and push by digest
+        if: ${{ inputs.publish }}
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: containers/${{ matrix.app }}/${{ matrix.version }}
+          file: containers/${{ matrix.app }}/${{ matrix.version }}/${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=igorferreir4/${{ matrix.app }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: |
+            type=gha,scope=${{ matrix.app }}-${{ matrix.version }}-${{ matrix.variant }}-${{ matrix.arch }}
+            type=registry,ref=igorferreir4/buildcaches:${{ matrix.app }}-${{ matrix.version }}-${{ matrix.arch }}${{ matrix.suffix }}
+          cache-to: type=gha,scope=${{ matrix.app }}-${{ matrix.version }}-${{ matrix.variant }}-${{ matrix.arch }},mode=max
+
+      - name: Export digest
+        if: ${{ inputs.publish }}
+        shell: bash
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        if: ${{ inputs.publish }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.app }}-${{ matrix.version }}-${{ matrix.variant }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    if: ${{ inputs.publish }}
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.images) }}
+    name: Publish ${{ matrix.app }} ${{ matrix.version }} ${{ matrix.variant }}
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          pattern: digests-${{ matrix.app }}-${{ matrix.version }}-${{ matrix.variant }}-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create multi-platform manifest
+        shell: bash
+        env:
+          IMAGE: igorferreir4/${{ matrix.app }}
+          IMAGE_TAGS: ${{ matrix.tags }}
+        run: |
+          TAG_ARGS=()
+          for tag in $(echo "$IMAGE_TAGS" | tr ',' ' '); do
+            TAG_ARGS+=("-t" "$IMAGE:$tag")
+          done
+
+          DIGEST_ARGS=()
+          for digest_file in /tmp/digests/*; do
+            DIGEST_ARGS+=("$IMAGE@sha256:$(basename "$digest_file")")
+          done
+
+          docker buildx imagetools create "${TAG_ARGS[@]}" "${DIGEST_ARGS[@]}"
+
+      - name: Verify multi-platform manifest
+        shell: bash
+        env:
+          IMAGE: igorferreir4/${{ matrix.app }}
+          IMAGE_TAGS: ${{ matrix.tags }}
+        run: |
+          FIRST_TAG=${IMAGE_TAGS%%,*}
+          docker buildx imagetools inspect "$IMAGE:$FIRST_TAG"
